@@ -1,8 +1,10 @@
+
 import React, { useState } from 'react';
 import { Car, User } from '../types';
 import { analyzeCarListing } from '../services/geminiService';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Sparkles, Plus, Car as CarIcon, DollarSign, Loader2 } from 'lucide-react';
+import { Sparkles, Plus, Car as CarIcon, DollarSign, Loader2, Upload } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 interface OwnerDashboardProps {
   user: User;
@@ -32,6 +34,10 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
   const [description, setDescription] = useState('');
   const [features, setFeatures] = useState<string[]>([]);
 
+  // Image Upload State
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+
   const handleAIAnalysis = async () => {
     if (!make || !model) {
       alert("Por favor, preencha Marca e Modelo para a IA analisar.");
@@ -45,8 +51,40 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
     setLoadingAI(false);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    let finalImageUrl = `https://picsum.photos/400/300?random=${Math.random()}`; // Fallback
+
+    if (imageFile) {
+      setUploading(true);
+      try {
+        const fileExt = imageFile.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('cars')
+          .upload(filePath, imageFile);
+
+        if (uploadError) {
+          console.error("Upload error details:", uploadError);
+          throw uploadError;
+        }
+
+        const { data } = supabase.storage
+          .from('cars')
+          .getPublicUrl(filePath);
+
+        finalImageUrl = data.publicUrl;
+      } catch (error) {
+        console.error('Error uploading image:', error);
+        alert('Atenção: A imagem não pôde ser salva. Verifique se você criou o Bucket "cars" no Supabase.\n\nO carro será salvo com imagem demonstrativa.');
+      } finally {
+        setUploading(false);
+      }
+    }
+
     const newCar: Omit<Car, 'id'> = {
       ownerId: user.id,
       make,
@@ -55,14 +93,14 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
       category,
       pricePerDay: price,
       description,
-      imageUrl: `https://picsum.photos/400/300?random=${Math.random()}`,
+      imageUrl: finalImageUrl,
       features,
       isAvailable: true,
     };
     onAddCar(newCar);
     setIsAdding(false);
     // Reset form
-    setMake(''); setModel(''); setDescription(''); setPrice(0);
+    setMake(''); setModel(''); setDescription(''); setPrice(0); setImageFile(null);
   };
 
   if (isAdding) {
@@ -118,6 +156,26 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
             <p className="text-xs text-indigo-700 mb-4">A IA vai analisar o mercado e sugerir o melhor preço e descrição para seu carro.</p>
           </div>
 
+          {/* Image Upload Input */}
+          <div className="p-4 border-2 border-dashed border-slate-300 rounded-lg bg-slate-50 hover:bg-slate-100 transition">
+            <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2 cursor-pointer">
+              <Upload className="w-4 h-4" />
+              Foto do Veículo
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={e => setImageFile(e.target.files ? e.target.files[0] : null)}
+              className="w-full text-sm text-slate-500
+              file:mr-4 file:py-2 file:px-4
+              file:rounded-full file:border-0
+              file:text-sm file:font-semibold
+              file:bg-indigo-600 file:text-white
+              hover:file:bg-indigo-700 cursor-pointer"
+            />
+            {imageFile && <p className="text-xs text-green-600 mt-2 font-medium">Imagem selecionada: {imageFile.name}</p>}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Preço/Dia (R$)</label>
@@ -134,8 +192,17 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
             <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} className="w-full p-2 border rounded-md" required></textarea>
           </div>
 
-          <button type="submit" className="w-full bg-slate-900 text-white py-3 rounded-lg hover:bg-slate-800 transition font-semibold">
-            Cadastrar Veículo
+          <button
+            type="submit"
+            disabled={uploading}
+            className="w-full bg-slate-900 text-white py-3 rounded-lg hover:bg-slate-800 transition font-semibold disabled:opacity-50 flex justify-center"
+          >
+            {uploading ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                Estamos salvando a foto...
+              </>
+            ) : 'Cadastrar Veículo'}
           </button>
         </form>
       </div>
