@@ -250,6 +250,67 @@ export const getActiveRentals = async (ownerId: string): Promise<Rental[]> => {
     return mergedRentals as Rental[];
 };
 
+export const getOwnerRentalHistory = async (ownerId: string): Promise<Rental[]> => {
+    // 1. Fetch ALL Rentals for the owner (including completed/cancelled)
+    const { data: rentalsData, error: rentalsError } = await supabase
+        .from('rentals')
+        .select(`
+            id,
+            carId:car_id,
+            renterId:renter_id,
+            ownerId:owner_id,
+            startDate:start_date,
+            endDate:end_date,
+            totalPrice:total_price,
+            status,
+            createdAt:created_at
+        `)
+        .eq('owner_id', ownerId)
+        .order('created_at', { ascending: false });
+
+    if (rentalsError) {
+        console.error('Error fetching rental history:', rentalsError);
+        return [];
+    }
+
+    if (!rentalsData || rentalsData.length === 0) {
+        return [];
+    }
+
+    const rentals = rentalsData as Rental[];
+
+    // 2. Fetch Renters (Users) logic
+    const renterIds = [...new Set(rentals.map(r => r.renterId))]; // Unique IDs
+
+    const { data: usersData, error: usersError } = await supabase
+        .from('users')
+        .select('id, name, email')
+        .in('id', renterIds);
+
+    // 3. Fetch Car Details (to show car name in history)
+    const carIds = [...new Set(rentals.map(r => r.carId))];
+    const { data: carsData, error: carsError } = await supabase
+        .from('cars')
+        .select('id, make, model')
+        .in('id', carIds);
+
+    if (usersError) {
+        console.error('Error fetching renters:', usersError);
+    }
+
+    // 4. Merge Data
+    const usersMap = new Map(usersData?.map(u => [u.id, u]) || []);
+    const carsMap = new Map(carsData?.map(c => [c.id, c]) || []);
+
+    const mergedRentals = rentals.map(rental => ({
+        ...rental,
+        renter: usersMap.get(rental.renterId),
+        car: carsMap.get(rental.carId) as Car // Attach car partial details
+    }));
+
+    return mergedRentals as Rental[];
+};
+
 export const getRenterHistory = async (renterId: string): Promise<Rental[]> => {
     const { data, error } = await supabase
         .from('rentals')

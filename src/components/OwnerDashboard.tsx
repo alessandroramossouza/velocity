@@ -1,10 +1,12 @@
-
 import React, { useState, useEffect } from 'react';
 import { Car, User, Rental } from '../types';
 import { analyzeCarListing } from '../services/geminiService';
-import { getActiveRentals, completeRental } from '../services/api';
+import { getActiveRentals, completeRental, getOwnerRentalHistory } from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Sparkles, Plus, Car as CarIcon, DollarSign, Loader2, Upload, Pencil, RotateCcw, Calendar, AlertCircle } from 'lucide-react';
+import {
+  Sparkles, Plus, Car as CarIcon, DollarSign, Loader2, Upload, Pencil, RotateCcw,
+  Calendar, AlertCircle, LayoutGrid, History, ChevronRight, User as UserIcon, CheckCircle, XCircle
+} from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface OwnerDashboardProps {
@@ -17,10 +19,17 @@ interface OwnerDashboardProps {
 }
 
 export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, onAddCar, onUpdateCar, onCarReturned, showToast }) => {
+  const [activeTab, setActiveTab] = useState<'overview' | 'cars' | 'history'>('overview');
   const [isAdding, setIsAdding] = useState(false);
   const [editingCar, setEditingCar] = useState<Car | null>(null);
   const [loadingAI, setLoadingAI] = useState(false);
   const [activeRentals, setActiveRentals] = useState<Rental[]>([]);
+  const [rentalHistory, setRentalHistory] = useState<Rental[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // Date Filters
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
 
   // Form State
   const [make, setMake] = useState('');
@@ -48,8 +57,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
         { event: '*', schema: 'public', table: 'rentals' },
         (payload) => {
           console.log('Change received!', payload);
-          // Only reload if the change is relevant (simplification: simple reload)
           loadActiveRentals();
+          if (activeTab === 'history') loadHistory(); // Reload history if active
           if (payload.eventType === 'INSERT') {
             showToast('Novo aluguel recebido!', 'success');
           }
@@ -62,9 +71,22 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
     };
   }, [user.id]);
 
+  useEffect(() => {
+    if (activeTab === 'history') {
+      loadHistory();
+    }
+  }, [activeTab]);
+
   const loadActiveRentals = async () => {
     const rentals = await getActiveRentals(user.id);
     setActiveRentals(rentals);
+  };
+
+  const loadHistory = async () => {
+    setLoadingHistory(true);
+    const history = await getOwnerRentalHistory(user.id);
+    setRentalHistory(history);
+    setLoadingHistory(false);
   };
 
   const startEditing = (car: Car) => {
@@ -80,6 +102,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
     setFeatures(car.features);
     setIsAdding(true);
     setImageFile(null);
+    setActiveTab('cars'); // Switch to cars tab to show form
   };
 
   const handleCancel = () => {
@@ -122,9 +145,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
           .from('cars')
           .upload(filePath, imageFile);
 
-        if (uploadError) {
-          throw uploadError;
-        }
+        if (uploadError) throw uploadError;
 
         const { data } = supabase.storage
           .from('cars')
@@ -139,33 +160,19 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
       }
     }
 
+    const commonData = {
+      make, model, year, category,
+      pricePerDay: price,
+      pricePerWeek: priceWeek,
+      pricePerMonth: priceMonth,
+      description, imageUrl: finalImageUrl, features,
+    };
+
     if (editingCar) {
-      const updatedCar: Car = {
-        ...editingCar,
-        make, model, year, category,
-        pricePerDay: price,
-        pricePerWeek: priceWeek,
-        pricePerMonth: priceMonth,
-        description, imageUrl: finalImageUrl, features,
-      };
-      onUpdateCar(updatedCar);
+      onUpdateCar({ ...editingCar, ...commonData });
       showToast("Veículo atualizado!", 'success');
     } else {
-      const newCar: Omit<Car, 'id'> = {
-        ownerId: user.id,
-        make,
-        model,
-        year,
-        category,
-        pricePerDay: price,
-        pricePerWeek: priceWeek,
-        pricePerMonth: priceMonth,
-        description,
-        imageUrl: finalImageUrl,
-        features,
-        isAvailable: true,
-      };
-      onAddCar(newCar);
+      onAddCar({ ownerId: user.id, isAvailable: true, ...commonData });
       showToast("Veículo cadastrado!", 'success');
     }
 
@@ -176,21 +183,31 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
     if (!confirm(`Confirmar devolução do veículo?`)) return;
 
     try {
-      await completeRental(rental.id, rental.carId);
+      await completeRental(rental.id, String(rental.carId));
       setActiveRentals(activeRentals.filter(r => r.id !== rental.id));
       onCarReturned(rental.carId);
+      loadHistory(); // Refresh history
       showToast("Veículo devolvido e disponível novamente!", 'success');
     } catch (e) {
       showToast("Erro ao processar devolução.", 'error');
     }
   };
 
-  // Find car by rental
   const getCarForRental = (rental: Rental) => {
-    return myCars.find(c => String(c.id) === String(rental.carId));
+    // Try to get from rental object first (if populated by history fetch), fallback to myCars find
+    return (rental as any).car || myCars.find(c => String(c.id) === String(rental.carId));
   };
 
+  // Stats
+  const rentedCarsCount = myCars.filter(c => !c.isAvailable).length;
+  const totalEarnings = activeRentals.reduce((acc, curr) => acc + (curr.totalPrice || 0), 0);
+  const chartData = [
+    { name: 'Faturado', value: totalEarnings },
+    { name: 'Potencial', value: myCars.reduce((acc, c) => acc + c.pricePerDay * 30, 0) }
+  ];
+
   if (isAdding) {
+    // Form Layout (Keep existing form layout logic, just wrapped properly)
     return (
       <div className="bg-white p-6 rounded-xl shadow-lg border border-slate-200 animate-fade-in">
         <div className="flex justify-between items-center mb-6">
@@ -199,8 +216,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
           </h2>
           <button onClick={handleCancel} className="text-slate-500 hover:text-slate-700">Cancelar</button>
         </div>
-
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Form fields same as before... re-implementing to ensure it works */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Marca</label>
@@ -232,12 +249,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
                 <Sparkles className="w-4 h-4 text-indigo-600" />
                 Assistente IA
               </h3>
-              <button
-                type="button"
-                onClick={handleAIAnalysis}
-                disabled={loadingAI}
-                className="bg-indigo-600 text-white text-sm px-4 py-2 rounded-full hover:bg-indigo-700 transition flex items-center gap-2"
-              >
+              <button type="button" onClick={handleAIAnalysis} disabled={loadingAI} className="bg-indigo-600 text-white text-sm px-4 py-2 rounded-full hover:bg-indigo-700 transition flex items-center gap-2">
                 {loadingAI ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                 Sugerir Preço e Descrição
               </button>
@@ -250,13 +262,11 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
               <Upload className="w-4 h-4" />
               Foto do Veículo {editingCar && '(Deixe vazio para manter)'}
             </label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={e => setImageFile(e.target.files ? e.target.files[0] : null)}
-              className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer"
-            />
-            {imageFile && <p className="text-xs text-green-600 mt-2 font-medium">Selecionado: {imageFile.name}</p>}
+            <input type="file" accept="image/*" onChange={e => setImageFile(e.target.files ? e.target.files[0] : null)} className="hidden" id="car-upload" />
+            <label htmlFor="car-upload" className="w-full text-sm text-slate-500 flex items-center gap-2 cursor-pointer">
+              <span className="bg-indigo-600 text-white px-4 py-2 rounded-full text-xs font-semibold">Escolher Arquivo</span>
+              {imageFile ? <span className="text-green-600 font-medium">{imageFile.name}</span> : <span className="text-slate-400">Nenhum arquivo selecionado</span>}
+            </label>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -264,7 +274,6 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
               <label className="block text-sm font-medium text-slate-700 mb-1">Características (vírgula)</label>
               <input type="text" value={features.join(', ')} onChange={e => setFeatures(e.target.value.split(',').map(s => s.trim()))} className="w-full p-2 border rounded-md" />
             </div>
-            {/* Price Grid */}
             <div className="grid grid-cols-3 gap-2">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1">Dia (R$)</label>
@@ -286,183 +295,307 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
             <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} className="w-full p-2 border rounded-md" required></textarea>
           </div>
 
-          <button
-            type="submit"
-            disabled={uploading}
-            className="w-full bg-slate-900 text-white py-3 rounded-lg hover:bg-slate-800 transition font-semibold disabled:opacity-50 flex justify-center"
-          >
-            {uploading ? <><Loader2 className="w-5 h-5 animate-spin mr-2" /> Salvando...</> : (editingCar ? 'Salvar Alterações' : 'Cadastrar Veículo')}
+          <button type="submit" disabled={uploading} className="w-full bg-slate-900 text-white py-3 rounded-lg hover:bg-slate-800 transition font-semibold disabled:opacity-50 flex justify-center">
+            {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : (editingCar ? 'Salvar Alterações' : 'Cadastrar Veículo')}
           </button>
         </form>
       </div>
     );
   }
 
-  // Calculate real stats
-  const rentedCars = myCars.filter(c => !c.isAvailable);
-  const totalEarnings = activeRentals.reduce((acc, curr) => acc + (curr.totalPrice || 0), 0);
-
-  // Data for chart (Simplified: just active vs potential)
-  const chartData = [
-    { name: 'Faturado', value: totalEarnings },
-    { name: 'Potencial', value: myCars.reduce((acc, c) => acc + c.pricePerDay * 30, 0) } // Mock projection
-  ];
+  // Render Tabs
+  const renderTabButton = (id: 'overview' | 'cars' | 'history', icon: React.ReactNode, label: string) => (
+    <button
+      onClick={() => setActiveTab(id)}
+      className={`flex items-center gap-2 px-6 py-3 border-b-2 transition-colors duration-200 ${activeTab === id ? 'border-indigo-600 text-indigo-600 font-bold' : 'border-transparent text-slate-500 hover:text-slate-700'
+        }`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
 
   return (
-    <div className="space-y-8">
-      {/* Header Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-500">Total em Aluguéis Ativos</p>
-              <p className="text-2xl font-bold text-slate-900">R$ {totalEarnings.toFixed(2)}</p>
-            </div>
-            <div className="p-3 bg-green-100 rounded-full">
-              <DollarSign className="w-5 h-5 text-green-600" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-500">Meus Carros</p>
-              <p className="text-2xl font-bold text-slate-900">{myCars.length}</p>
-            </div>
-            <div className="p-3 bg-blue-100 rounded-full">
-              <CarIcon className="w-5 h-5 text-blue-600" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-500">Alugados Agora</p>
-              <p className="text-2xl font-bold text-orange-600">{rentedCars.length}</p>
-            </div>
-            <div className="p-3 bg-orange-100 rounded-full">
-              <Calendar className="w-5 h-5 text-orange-600" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white p-5 rounded-xl shadow-sm border flex items-center justify-center border-slate-200">
-          <button
-            onClick={() => { setEditingCar(null); resetForm(); setIsAdding(true); }}
-            className="w-full h-full min-h-[50px] flex items-center justify-center gap-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
-          >
-            <Plus className="w-5 h-5" />
-            Novo Carro
-          </button>
+    <div className="space-y-8 animate-fade-in">
+      {/* Dashboard Navigation */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="flex overflow-x-auto">
+          {renderTabButton('overview', <LayoutGrid className="w-5 h-5" />, 'Visão Geral')}
+          {renderTabButton('cars', <CarIcon className="w-5 h-5" />, 'Minha Frota')}
+          {renderTabButton('history', <History className="w-5 h-5" />, 'Histórico de Locações')}
         </div>
       </div>
 
-      {/* Active Rentals Alert */}
-      {activeRentals.length > 0 && (
-        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <AlertCircle className="w-5 h-5 text-orange-600" />
-            <h3 className="font-semibold text-orange-900">Aluguéis em Andamento ({activeRentals.length})</h3>
-          </div>
-          <div className="space-y-2">
-            {activeRentals.map(rental => {
-              const car = getCarForRental(rental);
-              return (
-                <div key={rental.id} className="bg-white p-4 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border border-slate-100 shadow-sm">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-bold text-slate-800 text-lg">{car ? `${car.make} ${car.model}` : 'Carro não encontrado'}</span>
-                      <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">Alugado</span>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row gap-4 mt-2 text-sm text-slate-600">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-4 h-4 text-slate-400" />
-                        <span>{new Date(rental.startDate).toLocaleDateString('pt-BR')} até {new Date(rental.endDate).toLocaleDateString('pt-BR')}</span>
-                      </div>
-
-                      {/* Exibir Quem Alugou */}
-                      {rental.renter && (
-                        <div className="flex items-center gap-2 bg-slate-50 px-3 py-1 rounded-md border border-slate-200">
-                          <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-bold">
-                            {rental.renter.name.charAt(0).toUpperCase()}
-                          </div>
-                          <div className="flex flex-col leading-tight">
-                            <span className="font-medium text-slate-900">{rental.renter.name}</span>
-                            <span className="text-xs text-slate-500">{rental.renter.email}</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => handleReturnCar(rental)}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition w-full sm:w-auto justify-center"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                    Receber Devolução
-                  </button>
+      {/* OVERVIEW TAB */}
+      {activeTab === 'overview' && (
+        <div className="space-y-8">
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-slate-500">Total Faturado</p>
+                  <p className="text-2xl font-bold text-slate-900">R$ {totalEarnings.toFixed(2)}</p>
                 </div>
-              );
-            })}
+                <div className="p-3 bg-green-100 rounded-full"><DollarSign className="w-5 h-5 text-green-600" /></div>
+              </div>
+            </div>
+            <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-slate-500">Meus Carros</p>
+                  <p className="text-2xl font-bold text-slate-900">{myCars.length}</p>
+                </div>
+                <div className="p-3 bg-blue-100 rounded-full"><CarIcon className="w-5 h-5 text-blue-600" /></div>
+              </div>
+            </div>
+            <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-slate-500">Alugados Agora</p>
+                  <p className="text-2xl font-bold text-orange-600">{rentedCarsCount}</p>
+                </div>
+                <div className="p-3 bg-orange-100 rounded-full"><Calendar className="w-5 h-5 text-orange-600" /></div>
+              </div>
+            </div>
+            <div className="bg-white p-5 rounded-xl shadow-sm border flex items-center justify-center border-slate-200 cursor-pointer hover:bg-slate-50 transition" onClick={() => { setEditingCar(null); resetForm(); setIsAdding(true); }}>
+              <div className="flex items-center gap-2 text-indigo-600 font-bold">
+                <Plus className="w-5 h-5" />
+                <span>Novo Veículo</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Active Rentals (Important Alert) */}
+          {activeRentals.length > 0 && (
+            <div className="bg-orange-50 border border-orange-200 rounded-xl p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <AlertCircle className="w-6 h-6 text-orange-600" />
+                <h3 className="text-lg font-bold text-orange-900">Aluguéis em Andamento ({activeRentals.length})</h3>
+              </div>
+              <div className="space-y-3">
+                {activeRentals.map(rental => {
+                  const car = getCarForRental(rental);
+                  return (
+                    <div key={rental.id} className="bg-white p-4 rounded-lg flex flex-col md:flex-row justify-between items-center gap-4 shadow-sm border border-slate-100">
+                      <div className="flex items-center gap-4 flex-1">
+                        <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-bold text-xl">
+                          {rental.renter?.name.charAt(0) || '?'}
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900">{rental.renter?.name || 'Locatário Desconhecido'}</p>
+                          <p className="text-sm text-slate-500">{car ? `${car.make} ${car.model}` : 'Carro não encontrado'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className="text-xs text-slate-500 uppercase font-semibold">Devolução</p>
+                          <p className="font-bold text-slate-800">{new Date(rental.endDate).toLocaleDateString()}</p>
+                        </div>
+                        <button onClick={() => handleReturnCar(rental)} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition flex items-center gap-2">
+                          <RotateCcw className="w-4 h-4" /> Receber
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Financial Chart */}
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h3 className="text-lg font-bold text-slate-800 mb-6">Projeção Financeira</h3>
+            <div className="h-[250px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                  <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `R$${value}`} />
+                  <Tooltip cursor={{ fill: '#f1f5f9' }} />
+                  <Bar dataKey="value" fill="#4f46e5" radius={[4, 4, 0, 0]} barSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Chart Section */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-        <h3 className="text-lg font-bold text-slate-800 mb-6">Desempenho Financeiro (Projeção)</h3>
-        <div className="h-[250px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} />
-              <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `R$${value}`} />
-              <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} cursor={{ fill: '#f1f5f9' }} />
-              <Bar dataKey="value" fill="#4f46e5" radius={[4, 4, 0, 0]} barSize={40} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* My Cars List */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-bold text-slate-800">Minha Frota</h3>
-        {myCars.length === 0 ? (
-          <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl p-8 text-center">
-            <CarIcon className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500">Você ainda não tem veículos cadastrados.</p>
-            <button onClick={() => setIsAdding(true)} className="mt-4 text-indigo-600 font-medium hover:underline">
-              Cadastrar meu primeiro carro
+      {/* CARS TAB */}
+      {activeTab === 'cars' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-xl font-bold text-slate-800">Minha Frota ({myCars.length})</h3>
+            <button onClick={() => { setEditingCar(null); resetForm(); setIsAdding(true); }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition flex items-center gap-2">
+              <Plus className="w-4 h-4" /> Adicionar Carro
             </button>
           </div>
-        ) : (
-          myCars.map(car => (
-            <div key={car.id} className={`bg-white p-4 rounded-lg border flex gap-4 items-center group relative transition-all ${car.isAvailable ? 'border-slate-200 hover:border-indigo-300' : 'border-orange-200 bg-orange-50/30'}`}>
-              <img src={car.imageUrl} alt={car.model} className="w-24 h-24 object-cover rounded-md" />
-              <div className="flex-1">
-                <h4 className="font-bold text-slate-900">{car.make} {car.model}</h4>
-                <p className="text-sm text-slate-500">{car.year} • {car.category}</p>
-                <p className="text-sm text-green-600 font-medium">R$ {car.pricePerDay}/dia</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {myCars.map(car => (
+              <div key={car.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden group hover:shadow-md transition">
+                <div className="relative h-48">
+                  <img src={car.imageUrl} alt={car.model} className="w-full h-full object-cover" />
+                  <div className={`absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold ${car.isAvailable ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'}`}>
+                    {car.isAvailable ? 'Disponível' : 'Alugado'}
+                  </div>
+                </div>
+                <div className="p-5">
+                  <h4 className="font-bold text-lg text-slate-900">{car.make} {car.model}</h4>
+                  <p className="text-slate-500 text-sm mb-4">{car.year} • {car.category}</p>
+
+                  <div className="flex justify-between items-center border-t pt-4">
+                    <span className="text-green-700 font-bold text-lg">R$ {car.pricePerDay}<span className="text-sm font-normal text-slate-500">/dia</span></span>
+                    <button onClick={() => startEditing(car)} className="text-indigo-600 hover:text-indigo-800 font-medium text-sm flex items-center gap-1">
+                      Editar <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
               </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-              <div className="text-right flex flex-col items-end gap-2">
-                <span className={`px-3 py-1 rounded-full text-xs font-medium ${car.isAvailable ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
-                  {car.isAvailable ? 'Disponível' : 'Alugado'}
-                </span>
+      {/* HISTORY TAB */}
+      {activeTab === 'history' && (
+        <div className="space-y-6">
+          <div className="flex flex-col md:flex-row justify-between items-end gap-4">
+            <h3 className="text-xl font-bold text-slate-800">Histórico de Locações</h3>
 
-                <button
-                  onClick={() => startEditing(car)}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-sm text-indigo-600 font-medium hover:text-indigo-800 bg-indigo-50 px-3 py-1 rounded-md"
-                >
-                  <Pencil className="w-3 h-3" />
-                  Editar
-                </button>
+            {/* Date Filters */}
+            <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
+              <div className="flex flex-col">
+                <span className="text-[10px] text-slate-500 font-semibold uppercase px-1">De</span>
+                <input
+                  type="date"
+                  className="text-sm bg-transparent border-none focus:ring-0 p-1 text-slate-700"
+                  value={filterStartDate}
+                  onChange={(e) => setFilterStartDate(e.target.value)}
+                />
+              </div>
+              <div className="h-8 w-px bg-slate-200 mx-1"></div>
+              <div className="flex flex-col">
+                <span className="text-[10px] text-slate-500 font-semibold uppercase px-1">Até</span>
+                <input
+                  type="date"
+                  className="text-sm bg-transparent border-none focus:ring-0 p-1 text-slate-700"
+                  value={filterEndDate}
+                  onChange={(e) => setFilterEndDate(e.target.value)}
+                />
+              </div>
+              <button
+                onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}
+                className="ml-2 text-xs text-slate-400 hover:text-slate-600 underline"
+                title="Limpar filtros"
+              >
+                Limpar
+              </button>
+            </div>
+          </div>
+
+          {loadingHistory ? (
+            <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>
+          ) : rentalHistory.length === 0 ? (
+            <div className="text-center py-12 bg-slate-50 rounded-xl border-dashed border-2 border-slate-200">
+              <UserIcon className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+              <p className="text-slate-500">Nenhum histórico de locação encontrado.</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm text-slate-600">
+                  <thead className="bg-slate-50 text-slate-700 font-semibold uppercase text-xs tracking-wider">
+                    <tr>
+                      <th className="p-4">Status</th>
+                      <th className="p-4">Veículo</th>
+                      <th className="p-4">Locatário</th>
+                      <th className="p-4">Período</th>
+                      <th className="p-4 text-right">Valor Total</th>
+                      <th className="p-4 text-center">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {rentalHistory
+                      .filter(rental => {
+                        if (!filterStartDate && !filterEndDate) return true;
+                        const rentalStart = new Date(rental.startDate);
+                        const startFilter = filterStartDate ? new Date(filterStartDate) : null;
+                        const endFilter = filterEndDate ? new Date(filterEndDate) : null;
+
+                        if (startFilter && rentalStart < startFilter) return false;
+                        if (endFilter && rentalStart > endFilter) return false;
+                        return true;
+                      })
+                      .map(rental => {
+                        const car = getCarForRental(rental);
+                        // Use a simpler find if car is partially populated
+                        const carDisplay = (rental as any).car || car;
+
+                        const isCompleted = rental.status === 'completed';
+                        const isActive = rental.status === 'active';
+
+                        return (
+                          <tr key={rental.id} className="hover:bg-slate-50 transition">
+                            <td className="p-4">
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border ${isActive ? 'bg-orange-100 text-orange-700 border-orange-200' :
+                                isCompleted ? 'bg-green-100 text-green-700 border-green-200' :
+                                  'bg-gray-100 text-gray-700 border-gray-200'
+                                }`}>
+                                {isActive ? 'Em Andamento' : isCompleted ? 'Concluído' : rental.status}
+                              </span>
+                            </td>
+                            <td className="p-4 font-medium text-slate-900">
+                              {carDisplay ? `${carDisplay.make} ${carDisplay.model}` : 'Veículo Removido'}
+                            </td>
+                            <td className="p-4">
+                              {rental.renter ? (
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600">
+                                    {rental.renter.name.charAt(0)}
+                                  </div>
+                                  <div className="flex flex-col">
+                                    <span className="font-medium text-slate-900">{rental.renter.name}</span>
+                                    <span className="text-xs text-slate-400">{rental.renter.email}</span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-slate-400 italic">Usuário não encontrado</span>
+                              )}
+                            </td>
+                            <td className="p-4 whitespace-nowrap">
+                              <div className="flex flex-col">
+                                <span>{new Date(rental.startDate).toLocaleDateString()}</span>
+                                <span className="text-slate-400 text-xs">até {new Date(rental.endDate).toLocaleDateString()}</span>
+                              </div>
+                            </td>
+                            <td className="p-4 text-right font-bold text-slate-900">
+                              R$ {rental.totalPrice?.toFixed(2)}
+                            </td>
+                            <td className="p-4 text-center">
+                              {isActive && (
+                                <button
+                                  onClick={() => handleReturnCar(rental)}
+                                  title="Receber Devolução"
+                                  className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition"
+                                >
+                                  <CheckCircle className="w-5 h-5" />
+                                </button>
+                              )}
+                              {isCompleted && (
+                                <span className="text-slate-400 text-xs">Finalizado</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
               </div>
             </div>
-          ))
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

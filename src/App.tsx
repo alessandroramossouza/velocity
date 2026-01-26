@@ -126,7 +126,7 @@ function AppContent() {
                 VeloCity
               </span>
               <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium ml-2">
-                v3.0
+                v3.1 (Atualizado)
               </span>
             </div>
 
@@ -211,12 +211,12 @@ function AppContent() {
             </div>
           </div>
         </div>
-      </nav>
+      </nav >
 
       {/* Main Content */}
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+      < main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full" >
         {/* Helper text for context */}
-        <div className="mb-8">
+        < div className="mb-8" >
           <h1 className="text-3xl font-bold text-slate-900">
             {currentUser.role === 'renter'
               ? (renterView === 'marketplace' ? 'Encontre seu próximo carro' : 'Histórico de Viagens')
@@ -229,38 +229,40 @@ function AppContent() {
                 : 'Acompanhe seus aluguéis ativos e consulte o histórico.')
               : 'Gerencie seus veículos, acompanhe aluguéis ativos e fature mais.'}
           </p>
-        </div>
+        </div >
 
-        {currentUser.role === 'renter' ? (
-          renterView === 'marketplace' ? (
-            <RenterMarketplace
-              cars={allCars}
-              currentUser={currentUser}
-              onRentCar={handleRentCar}
-            />
+        {
+          currentUser.role === 'renter' ? (
+            renterView === 'marketplace' ? (
+              <RenterMarketplace
+                cars={allCars}
+                currentUser={currentUser}
+                onRentCar={handleRentCar}
+              />
+            ) : (
+              <RenterHistory currentUser={currentUser} />
+            )
           ) : (
-            <RenterHistory currentUser={currentUser} />
+            <OwnerDashboard
+              user={currentUser}
+              myCars={myCars}
+              onAddCar={handleAddCar}
+              onUpdateCar={handleUpdateCar}
+              onCarReturned={handleCarReturned}
+              showToast={showToast}
+            />
           )
-        ) : (
-          <OwnerDashboard
-            user={currentUser}
-            myCars={myCars}
-            onAddCar={handleAddCar}
-            onUpdateCar={handleUpdateCar}
-            onCarReturned={handleCarReturned}
-            showToast={showToast}
-          />
-        )}
-      </main>
+        }
+      </main >
 
       {/* Footer */}
-      <footer className="bg-slate-900 text-slate-400 py-8 mt-auto">
+      < footer className="bg-slate-900 text-slate-400 py-8 mt-auto" >
         <div className="max-w-7xl mx-auto px-4 text-center">
           <p className="text-white font-semibold">VeloCity v3.0</p>
           <p className="text-sm mt-1">Aluguel inteligente de veículos</p>
         </div>
-      </footer>
-    </div>
+      </footer >
+    </div >
   );
 }
 
