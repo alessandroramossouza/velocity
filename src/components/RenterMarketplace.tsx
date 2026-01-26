@@ -265,8 +265,14 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars, curr
       {selectedCar && (
         <RentModal
           car={selectedCar}
+          currentUser={currentUser}
           onConfirm={handleRentConfirm}
           onClose={() => setSelectedCar(null)}
+          onNeedKYC={() => {
+            setSelectedCar(null);
+            // Will trigger KYC modal from App.tsx
+            alert('Por favor, verifique sua identidade primeiro. Clique no seu perfil.');
+          }}
         />
       )}
     </div>

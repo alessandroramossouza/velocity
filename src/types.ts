@@ -13,7 +13,7 @@ export interface Car {
   imageUrl: string;
   features: string[];
   isAvailable: boolean;
-  averageRating?: number; // Média de avaliações
+  averageRating?: number;
 }
 
 export interface User {
@@ -21,6 +21,13 @@ export interface User {
   name: string;
   role: 'owner' | 'renter';
   email: string;
+  // KYC Fields
+  cnhUrl?: string;
+  selfieUrl?: string;
+  isVerified?: boolean;
+  verificationDate?: string;
+  // Reputation
+  averageRating?: number;
 }
 
 export interface Rental {
@@ -35,17 +42,37 @@ export interface Rental {
   createdAt: string;
   // Joined data
   car?: Car;
-  renter?: User; // Dados do locatário
+  renter?: User;
+  // Payment
+  paymentStatus?: 'pending' | 'approved' | 'rejected';
 }
 
 export interface Review {
   id: string;
   rentalId: string;
-  carId: string;
+  carId?: string;
   renterId: string;
+  reviewerType: 'renter_to_car' | 'owner_to_renter';
+  reviewedUserId?: string; // Se for owner avaliando renter
   rating: number;
   comment: string;
   createdAt: string;
+  // Joined
+  reviewer?: User;
+}
+
+export interface Payment {
+  id: string;
+  rentalId: string;
+  amount: number;
+  currency: string;
+  status: 'pending' | 'approved' | 'rejected' | 'refunded';
+  paymentMethod?: string;
+  externalId?: string;
+  payerId: string;
+  receiverId: string;
+  createdAt: string;
+  paidAt?: string;
 }
 
 export interface Favorite {

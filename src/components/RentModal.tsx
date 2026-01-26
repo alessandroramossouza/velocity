@@ -1,18 +1,22 @@
 
 import React, { useState } from 'react';
-import { Car } from '../types';
-import { Calendar, X, CheckCircle, Tag } from 'lucide-react';
+import { Car, User } from '../types';
+import { Calendar, X, CheckCircle, Tag, Shield, AlertTriangle } from 'lucide-react';
+import { PaymentModal } from './PaymentModal';
 
 interface RentModalProps {
     car: Car;
+    currentUser: User;
     onConfirm: (startDate: string, endDate: string, totalPrice: number) => void;
     onClose: () => void;
+    onNeedKYC: () => void;
 }
 
-export const RentModal: React.FC<RentModalProps> = ({ car, onConfirm, onClose }) => {
+export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfirm, onClose, onNeedKYC }) => {
     const today = new Date().toISOString().split('T')[0];
     const [startDate, setStartDate] = useState(today);
     const [endDate, setEndDate] = useState('');
+    const [showPayment, setShowPayment] = useState(false);
 
     const calculateDays = () => {
         if (!startDate || !endDate) return 0;
@@ -28,16 +32,15 @@ export const RentModal: React.FC<RentModalProps> = ({ car, onConfirm, onClose })
         let plan = 'Diária';
         let total = days * dailyRate;
 
-        // Validar planos de longo prazo
         if (days >= 30 && car.pricePerMonth) {
-            const monthlyRate = car.pricePerMonth / 30; // Preço/dia equivalente
+            const monthlyRate = car.pricePerMonth / 30;
             if (monthlyRate < dailyRate) {
                 dailyRate = monthlyRate;
                 plan = 'Mensal';
                 total = (car.pricePerMonth / 30) * days;
             }
         } else if (days >= 7 && car.pricePerWeek) {
-            const weeklyRate = car.pricePerWeek / 7; // Preço/dia equivalente
+            const weeklyRate = car.pricePerWeek / 7;
             if (weeklyRate < dailyRate) {
                 dailyRate = weeklyRate;
                 plan = 'Semanal';
@@ -51,13 +54,39 @@ export const RentModal: React.FC<RentModalProps> = ({ car, onConfirm, onClose })
     const days = calculateDays();
     const { total: totalPrice, plan: appliedPlan, dailyRate: effectiveDailyRate } = calculateBestPrice(days);
 
-    const handleConfirm = () => {
+    const handleProceedToPayment = () => {
         if (days <= 0) {
             alert('Selecione um período válido.');
             return;
         }
+
+        // Check KYC
+        if (!currentUser.isVerified) {
+            onNeedKYC();
+            return;
+        }
+
+        setShowPayment(true);
+    };
+
+    const handlePaymentComplete = (paymentId: string) => {
+        setShowPayment(false);
         onConfirm(startDate, endDate, totalPrice);
     };
+
+    if (showPayment) {
+        return (
+            <PaymentModal
+                car={car}
+                totalPrice={totalPrice}
+                startDate={startDate}
+                endDate={endDate}
+                renterId={currentUser.id}
+                onPaymentComplete={handlePaymentComplete}
+                onClose={() => setShowPayment(false)}
+            />
+        );
+    }
 
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -74,6 +103,16 @@ export const RentModal: React.FC<RentModalProps> = ({ car, onConfirm, onClose })
                         </button>
                     </div>
                 </div>
+
+                {/* KYC Warning */}
+                {!currentUser.isVerified && (
+                    <div className="bg-amber-50 border-b border-amber-200 p-3 flex items-center gap-2">
+                        <AlertTriangle className="w-5 h-5 text-amber-600" />
+                        <p className="text-sm text-amber-800">
+                            <strong>Atenção:</strong> Você precisará verificar sua identidade antes de pagar.
+                        </p>
+                    </div>
+                )}
 
                 {/* Content */}
                 <div className="p-6 space-y-6">
@@ -141,12 +180,21 @@ export const RentModal: React.FC<RentModalProps> = ({ car, onConfirm, onClose })
                             Cancelar
                         </button>
                         <button
-                            onClick={handleConfirm}
+                            onClick={handleProceedToPayment}
                             disabled={days <= 0}
                             className="flex-1 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            <CheckCircle className="w-5 h-5" />
-                            Confirmar Aluguel
+                            {currentUser.isVerified ? (
+                                <>
+                                    <CheckCircle className="w-5 h-5" />
+                                    Ir para Pagamento
+                                </>
+                            ) : (
+                                <>
+                                    <Shield className="w-5 h-5" />
+                                    Verificar e Pagar
+                                </>
+                            )}
                         </button>
                     </div>
                 </div>

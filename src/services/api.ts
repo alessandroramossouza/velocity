@@ -308,6 +308,8 @@ export const createReview = async (
         rentalId: data.rental_id,
         carId: data.car_id,
         renterId: data.renter_id,
+        reviewerType: data.reviewer_type || 'renter_to_car',
+        reviewedUserId: data.reviewed_user_id,
         rating: data.rating,
         comment: data.comment,
         createdAt: data.created_at
@@ -331,6 +333,8 @@ export const getCarReviews = async (carId: string | number): Promise<Review[]> =
         rentalId: r.rental_id,
         carId: r.car_id,
         renterId: r.renter_id,
+        reviewerType: r.reviewer_type || 'renter_to_car',
+        reviewedUserId: r.reviewed_user_id,
         rating: r.rating,
         comment: r.comment,
         createdAt: r.created_at
@@ -398,7 +402,11 @@ export const getUserByEmail = async (email: string): Promise<User | null> => {
         id: data.id,
         name: data.name,
         email: data.email,
-        role: data.role as 'owner' | 'renter'
+        role: data.role as 'owner' | 'renter',
+        cnhUrl: data.cnh_url,
+        selfieUrl: data.selfie_url,
+        isVerified: data.is_verified || false,
+        verificationDate: data.verification_date
     };
 };
 
