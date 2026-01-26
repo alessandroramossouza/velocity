@@ -1,6 +1,6 @@
 
 import { supabase } from '../lib/supabase';
-import { Car } from '../types';
+import { Car, User } from '../types';
 
 export const getCars = async (): Promise<Car[]> => {
     const { data, error } = await supabase
@@ -24,7 +24,6 @@ export const getCars = async (): Promise<Car[]> => {
         return [];
     }
 
-    // Ensure features is typed correctly if DB returns it loosely
     return data as unknown as Car[];
 };
 
@@ -66,4 +65,24 @@ export const createCar = async (car: Omit<Car, 'id'>): Promise<Car> => {
     }
 
     return data as unknown as Car;
+};
+
+// Nova função para login
+export const getUserByEmail = async (email: string): Promise<User | null> => {
+    const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .single();
+
+    if (error || !data) {
+        return null;
+    }
+
+    return {
+        id: data.id,
+        name: data.name,
+        email: data.email,
+        role: data.role as 'owner' | 'renter'
+    };
 };

@@ -1,59 +1,53 @@
+
 import React, { useState, useEffect } from 'react';
 import { getCars, createCar } from './services/api';
 import { Car, User } from './types';
 import { OwnerDashboard } from './components/OwnerDashboard';
 import { RenterMarketplace } from './components/RenterMarketplace';
-import { Layout, CarFront, UserCircle, LogOut } from 'lucide-react';
-
-// MOCK DATA
-// MOCK DATA REMOVED
-
-
-const MOCK_USER: User = {
-  id: 'user1',
-  name: 'João Silva',
-  role: 'renter',
-  email: 'joao@example.com'
-};
+import { Login } from './components/Login';
+import { CarFront, UserCircle, LogOut } from 'lucide-react';
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<User>(MOCK_USER);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [allCars, setAllCars] = useState<Car[]>([]);
 
   useEffect(() => {
-    loadCars();
-  }, []);
+    if (currentUser) {
+      loadCars();
+    }
+  }, [currentUser]);
 
   const loadCars = async () => {
     const cars = await getCars();
     setAllCars(cars);
   };
 
-  // Switch role function to simulate the two sides of the platform
-  const toggleRole = () => {
-    setCurrentUser(prev => ({
-      ...prev,
-      role: prev.role === 'renter' ? 'owner' : 'renter'
-    }));
+  const handleLogin = (user: User) => {
+    setCurrentUser(user);
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setAllCars([]);
   };
 
   const handleAddCar = async (newCar: Omit<Car, 'id'>) => {
-    // Optimistic update or wait for ID? 
-    // Since we need the ID, let's create it first.
-    // However, onAddCar from OwnerDashboard passes a Car object with a generated ID probably?
-    // We should treat newCar as a request payload.
-    // The OwnerDashboard might need updating if it generates IDs. 
-    // For now assuming we pass it to backend.
     try {
       const savedCar = await createCar(newCar);
       setAllCars([...allCars, savedCar]);
+      alert("Carro cadastrado com sucesso!");
     } catch (e) {
       console.error(e);
       alert("Erro ao salvar carro");
     }
   };
 
-  const myCars = allCars.filter(c => c.ownerId === (currentUser.role === 'owner' ? 'owner1' : currentUser.id)); // Simulating ownership
+  if (!currentUser) {
+    return <Login onLogin={handleLogin} />;
+  }
+
+  // Filtrar carros para o dono ver apenas os dele
+  const myCars = allCars.filter(c => c.ownerId === currentUser.id);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
@@ -71,21 +65,23 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-4">
-              <button
-                onClick={toggleRole}
-                className="text-sm font-medium text-slate-600 hover:text-indigo-600 transition flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-full"
-              >
-                <Layout className="w-4 h-4" />
-                Modo: {currentUser.role === 'renter' ? 'Locatário (Buscar)' : 'Locador (Gerenciar)'}
-              </button>
-
               <div className="flex items-center gap-2 pl-4 border-l border-slate-200">
                 <UserCircle className="w-8 h-8 text-slate-400" />
-                <div className="hidden md:block">
+                <div className="hidden md:block text-right">
                   <p className="text-sm font-medium text-slate-900">{currentUser.name}</p>
-                  <p className="text-xs text-slate-500 capitalize">{currentUser.role}</p>
+                  <p className="text-xs text-slate-500 capitalize">
+                    {currentUser.role === 'owner' ? 'Locador (Dono)' : 'Locatário (Cliente)'}
+                  </p>
                 </div>
               </div>
+
+              <button
+                onClick={handleLogout}
+                className="p-2 text-slate-400 hover:text-red-600 transition"
+                title="Sair"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
             </div>
           </div>
         </div>
@@ -115,9 +111,6 @@ export default function App() {
       <footer className="bg-slate-900 text-slate-400 py-12">
         <div className="max-w-7xl mx-auto px-4 text-center">
           <p className="mb-4 text-white font-semibold">VeloCity &copy; 2024</p>
-          <p className="text-sm">
-            A revolução do aluguel de carros P2P. Powered by Gemini AI.
-          </p>
         </div>
       </footer>
     </div>
