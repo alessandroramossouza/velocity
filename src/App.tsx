@@ -4,6 +4,7 @@ import { getCars, createCar, updateCar, createRental, setCarAvailability } from 
 import { Car, User } from './types';
 import { OwnerDashboard } from './components/OwnerDashboard';
 import { RenterMarketplace } from './components/RenterMarketplace';
+import { RenterHistory } from './components/RenterHistory';
 import { Login } from './components/Login';
 import { ToastProvider, useToast, ToastStyles } from './components/Toast';
 import { CarFront, UserCircle, LogOut } from 'lucide-react';
@@ -11,6 +12,8 @@ import { CarFront, UserCircle, LogOut } from 'lucide-react';
 function AppContent() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [allCars, setAllCars] = useState<Car[]>([]);
+  const [renterView, setRenterView] = useState<'marketplace' | 'history'>('marketplace');
+
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -32,6 +35,7 @@ function AppContent() {
   const handleLogout = () => {
     setCurrentUser(null);
     setAllCars([]);
+    setRenterView('marketplace');
     showToast('Você saiu do sistema.', 'info');
   };
 
@@ -39,6 +43,7 @@ function AppContent() {
     try {
       const savedCar = await createCar(newCar);
       setAllCars([...allCars, savedCar]);
+      showToast("Carro cadastrado com sucesso!", 'success');
     } catch (e) {
       console.error(e);
       showToast("Erro ao salvar carro", 'error');
@@ -49,13 +54,13 @@ function AppContent() {
     try {
       const savedCar = await updateCar(updatedCar);
       setAllCars(allCars.map(c => c.id === savedCar.id ? savedCar : c));
+      showToast("Carro atualizado com sucesso!", 'success');
     } catch (e) {
       console.error(e);
       showToast("Erro ao atualizar carro", 'error');
     }
   };
 
-  // Nova função completa para alugar com datas
   const handleRentCar = async (carId: string | number, startDate: string, endDate: string, totalPrice: number) => {
     if (!currentUser) return;
 
@@ -71,13 +76,15 @@ function AppContent() {
       ));
 
       showToast(`Aluguel confirmado! Total: R$ ${totalPrice.toFixed(2)}`, 'success');
+
+      // Opcional: Redirecionar para histórico
+      // setRenterView('history'); 
     } catch (e) {
       console.error(e);
       showToast("Erro ao processar aluguel.", 'error');
     }
   };
 
-  // Quando carro é devolvido
   const handleCarReturned = (carId: string | number) => {
     setAllCars(allCars.map(c =>
       c.id === carId ? { ...c, isAvailable: true } : c
@@ -109,11 +116,28 @@ function AppContent() {
             </div>
 
             <div className="flex items-center gap-4">
+              {currentUser.role === 'renter' && (
+                <div className="hidden md:flex bg-slate-100 rounded-lg p-1 mr-4">
+                  <button
+                    onClick={() => setRenterView('marketplace')}
+                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${renterView === 'marketplace' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    Explorar
+                  </button>
+                  <button
+                    onClick={() => setRenterView('history')}
+                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${renterView === 'history' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    Meus Aluguéis
+                  </button>
+                </div>
+              )}
+
               <div className="flex items-center gap-2 pl-4 border-l border-slate-200">
                 <UserCircle className="w-8 h-8 text-slate-400" />
                 <div className="hidden md:block text-right">
                   <p className="text-sm font-medium text-slate-900">{currentUser.name}</p>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-slate-500 capitalize">
                     {currentUser.role === 'owner' ? 'Locador' : 'Locatário'}
                   </p>
                 </div>
@@ -133,23 +157,32 @@ function AppContent() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+        {/* Helper text for context */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900">
-            {currentUser.role === 'renter' ? 'Encontre o carro perfeito' : 'Painel do Locador'}
+            {currentUser.role === 'renter'
+              ? (renterView === 'marketplace' ? 'Encontre seu próximo carro' : 'Histórico de Viagens')
+              : 'Painel do Locador'}
           </h1>
           <p className="text-slate-500 mt-2">
             {currentUser.role === 'renter'
-              ? 'Explore nossa frota, favorite carros e alugue com calendário integrado.'
-              : 'Gerencie veículos, acompanhe aluguéis ativos e use IA para precificar.'}
+              ? (renterView === 'marketplace'
+                ? 'Explore nossa frota premium e reserve em segundos.'
+                : 'Acompanhe seus aluguéis ativos e consulte o histórico.')
+              : 'Gerencie seus veículos, acompanhe aluguéis ativos e fature mais.'}
           </p>
         </div>
 
         {currentUser.role === 'renter' ? (
-          <RenterMarketplace
-            cars={allCars}
-            currentUser={currentUser}
-            onRentCar={handleRentCar}
-          />
+          renterView === 'marketplace' ? (
+            <RenterMarketplace
+              cars={allCars}
+              currentUser={currentUser}
+              onRentCar={handleRentCar}
+            />
+          ) : (
+            <RenterHistory currentUser={currentUser} />
+          )
         ) : (
           <OwnerDashboard
             user={currentUser}
@@ -163,7 +196,7 @@ function AppContent() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-slate-900 text-slate-400 py-8">
+      <footer className="bg-slate-900 text-slate-400 py-8 mt-auto">
         <div className="max-w-7xl mx-auto px-4 text-center">
           <p className="text-white font-semibold">VeloCity v2.0</p>
           <p className="text-sm mt-1">Aluguel inteligente de veículos</p>
