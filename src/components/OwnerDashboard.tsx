@@ -16,15 +16,6 @@ interface OwnerDashboardProps {
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
 }
 
-const MOCK_EARNINGS_DATA = [
-  { name: 'Jan', earnings: 1200 },
-  { name: 'Fev', earnings: 1900 },
-  { name: 'Mar', earnings: 1500 },
-  { name: 'Abr', earnings: 2200 },
-  { name: 'Mai', earnings: 2800 },
-  { name: 'Jun', earnings: 2400 },
-];
-
 export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, onAddCar, onUpdateCar, onCarReturned, showToast }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [editingCar, setEditingCar] = useState<Car | null>(null);
@@ -265,8 +256,15 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
     );
   }
 
+  // Calculate real stats
   const rentedCars = myCars.filter(c => !c.isAvailable);
-  const availableCars = myCars.filter(c => c.isAvailable);
+  const totalEarnings = activeRentals.reduce((acc, curr) => acc + (curr.totalPrice || 0), 0);
+
+  // Data for chart (Simplified: just active vs potential)
+  const chartData = [
+    { name: 'Faturado', value: totalEarnings },
+    { name: 'Potencial', value: myCars.reduce((acc, c) => acc + c.pricePerDay * 30, 0) } // Mock projection
+  ];
 
   return (
     <div className="space-y-8">
@@ -275,8 +273,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
         <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-slate-500">Total Faturado</p>
-              <p className="text-2xl font-bold text-slate-900">R$ 12.450</p>
+              <p className="text-sm text-slate-500">Total em Aluguéis Ativos</p>
+              <p className="text-2xl font-bold text-slate-900">R$ {totalEarnings.toFixed(2)}</p>
             </div>
             <div className="p-3 bg-green-100 rounded-full">
               <DollarSign className="w-5 h-5 text-green-600" />
@@ -371,15 +369,15 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
 
       {/* Chart Section */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-        <h3 className="text-lg font-bold text-slate-800 mb-6">Desempenho Financeiro</h3>
+        <h3 className="text-lg font-bold text-slate-800 mb-6">Desempenho Financeiro (Projeção)</h3>
         <div className="h-[250px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={MOCK_EARNINGS_DATA}>
+            <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="name" axisLine={false} tickLine={false} />
               <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `R$${value}`} />
               <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} cursor={{ fill: '#f1f5f9' }} />
-              <Bar dataKey="earnings" fill="#4f46e5" radius={[4, 4, 0, 0]} barSize={40} />
+              <Bar dataKey="value" fill="#4f46e5" radius={[4, 4, 0, 0]} barSize={40} />
             </BarChart>
           </ResponsiveContainer>
         </div>
