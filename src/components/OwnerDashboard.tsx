@@ -28,6 +28,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
   const [year, setYear] = useState(new Date().getFullYear());
   const [category, setCategory] = useState<Car['category']>('Sedan');
   const [price, setPrice] = useState(0);
+  const [priceWeek, setPriceWeek] = useState<number | undefined>();
+  const [priceMonth, setPriceMonth] = useState<number | undefined>();
   const [description, setDescription] = useState('');
   const [features, setFeatures] = useState<string[]>([]);
 
@@ -51,6 +53,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
     setYear(car.year);
     setCategory(car.category);
     setPrice(car.pricePerDay);
+    setPriceWeek(car.pricePerWeek);
+    setPriceMonth(car.pricePerMonth);
     setDescription(car.description);
     setFeatures(car.features);
     setIsAdding(true);
@@ -117,7 +121,11 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
     if (editingCar) {
       const updatedCar: Car = {
         ...editingCar,
-        make, model, year, category, pricePerDay: price, description, imageUrl: finalImageUrl, features,
+        make, model, year, category,
+        pricePerDay: price,
+        pricePerWeek: priceWeek,
+        pricePerMonth: priceMonth,
+        description, imageUrl: finalImageUrl, features,
       };
       onUpdateCar(updatedCar);
       showToast("Veículo atualizado!", 'success');
@@ -129,6 +137,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
         year,
         category,
         pricePerDay: price,
+        pricePerWeek: priceWeek,
+        pricePerMonth: priceMonth,
         description,
         imageUrl: finalImageUrl,
         features,
@@ -230,12 +240,23 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Preço/Dia (R$)</label>
-              <input type="number" value={price} onChange={e => setPrice(Number(e.target.value))} className="w-full p-2 border rounded-md font-bold text-lg text-green-700" required />
-            </div>
-            <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Características (vírgula)</label>
               <input type="text" value={features.join(', ')} onChange={e => setFeatures(e.target.value.split(',').map(s => s.trim()))} className="w-full p-2 border rounded-md" />
+            </div>
+            {/* Price Grid */}
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Dia (R$)</label>
+                <input type="number" value={price} onChange={e => setPrice(Number(e.target.value))} className="w-full p-2 border rounded-md font-bold text-green-700" required />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Semana (R$)</label>
+                <input type="number" value={priceWeek || ''} onChange={e => setPriceWeek(Number(e.target.value))} className="w-full p-2 border rounded-md text-sm" placeholder="Opcional" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Mês (R$)</label>
+                <input type="number" value={priceMonth || ''} onChange={e => setPriceMonth(Number(e.target.value))} className="w-full p-2 border rounded-md text-sm" placeholder="Opcional" />
+              </div>
             </div>
           </div>
 

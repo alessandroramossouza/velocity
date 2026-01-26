@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Car } from '../types';
-import { Calendar, X, CheckCircle } from 'lucide-react';
+import { Calendar, X, CheckCircle, Tag } from 'lucide-react';
 
 interface RentModalProps {
     car: Car;
@@ -23,8 +23,33 @@ export const RentModal: React.FC<RentModalProps> = ({ car, onConfirm, onClose })
         return diffDays > 0 ? diffDays : 0;
     };
 
+    const calculateBestPrice = (days: number) => {
+        let dailyRate = car.pricePerDay;
+        let plan = 'Diária';
+        let total = days * dailyRate;
+
+        // Validar planos de longo prazo
+        if (days >= 30 && car.pricePerMonth) {
+            const monthlyRate = car.pricePerMonth / 30; // Preço/dia equivalente
+            if (monthlyRate < dailyRate) {
+                dailyRate = monthlyRate;
+                plan = 'Mensal';
+                total = (car.pricePerMonth / 30) * days;
+            }
+        } else if (days >= 7 && car.pricePerWeek) {
+            const weeklyRate = car.pricePerWeek / 7; // Preço/dia equivalente
+            if (weeklyRate < dailyRate) {
+                dailyRate = weeklyRate;
+                plan = 'Semanal';
+                total = (car.pricePerWeek / 7) * days;
+            }
+        }
+
+        return { total, plan, dailyRate };
+    };
+
     const days = calculateDays();
-    const totalPrice = days * car.pricePerDay;
+    const { total: totalPrice, plan: appliedPlan, dailyRate: effectiveDailyRate } = calculateBestPrice(days);
 
     const handleConfirm = () => {
         if (days <= 0) {
@@ -83,15 +108,26 @@ export const RentModal: React.FC<RentModalProps> = ({ car, onConfirm, onClose })
                     {/* Price Breakdown */}
                     <div className="bg-slate-50 rounded-xl p-4 space-y-2">
                         <div className="flex justify-between text-slate-600">
-                            <span>Diária</span>
-                            <span>R$ {car.pricePerDay.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between text-slate-600">
                             <span>Quantidade de dias</span>
                             <span>{days} {days === 1 ? 'dia' : 'dias'}</span>
                         </div>
-                        <div className="border-t border-slate-200 pt-2 flex justify-between font-bold text-lg">
-                            <span>Total</span>
+
+                        {appliedPlan !== 'Diária' && (
+                            <div className="flex items-center justify-between text-green-600 text-sm font-medium bg-green-50 p-2 rounded-md">
+                                <span className="flex items-center gap-1">
+                                    <Tag className="w-4 h-4" /> Desconto aplicado:
+                                </span>
+                                <span>Plano {appliedPlan}</span>
+                            </div>
+                        )}
+
+                        <div className="flex justify-between text-slate-600 text-sm">
+                            <span>Custo médio por dia</span>
+                            <span>R$ {effectiveDailyRate.toFixed(2)}</span>
+                        </div>
+
+                        <div className="border-t border-slate-200 pt-2 flex justify-between font-bold text-lg mt-2">
+                            <span>Total Estimado</span>
                             <span className="text-indigo-600">R$ {totalPrice.toFixed(2)}</span>
                         </div>
                     </div>

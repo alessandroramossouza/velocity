@@ -17,10 +17,13 @@ export const getCars = async (): Promise<Car[]> => {
             year,
             category,
             pricePerDay:price_per_day,
+            pricePerWeek:price_per_week,
+            pricePerMonth:price_per_month,
             description,
             imageUrl:image_url,
             features,
-            isAvailable:is_available
+            isAvailable:is_available,
+            created_at
         `);
 
     if (error) {
@@ -39,6 +42,8 @@ export const createCar = async (car: Omit<Car, 'id'>): Promise<Car> => {
         year: car.year,
         category: car.category,
         price_per_day: car.pricePerDay,
+        price_per_week: car.pricePerWeek,
+        price_per_month: car.pricePerMonth,
         description: car.description,
         image_url: car.imageUrl,
         features: car.features,
@@ -56,6 +61,8 @@ export const createCar = async (car: Omit<Car, 'id'>): Promise<Car> => {
             year,
             category,
             pricePerDay:price_per_day,
+            pricePerWeek:price_per_week,
+            pricePerMonth:price_per_month,
             description,
             imageUrl:image_url,
             features,
@@ -78,6 +85,8 @@ export const updateCar = async (car: Car): Promise<Car> => {
         year: car.year,
         category: car.category,
         price_per_day: car.pricePerDay,
+        price_per_week: car.pricePerWeek,
+        price_per_month: car.pricePerMonth,
         description: car.description,
         image_url: car.imageUrl,
         features: car.features,
@@ -96,6 +105,8 @@ export const updateCar = async (car: Car): Promise<Car> => {
             year,
             category,
             pricePerDay:price_per_day,
+            pricePerWeek:price_per_week,
+            pricePerMonth:price_per_month,
             description,
             imageUrl:image_url,
             features,
@@ -395,6 +406,12 @@ export const registerUser = async (email: string, name: string, role: 'owner' | 
     // Generate a simple ID or let DB generate if using uuid.
     // Our DB uses text ID. Let's use timestamp or random string.
     const id = Math.random().toString(36).substr(2, 9);
+
+    // Check if user exists first to avoid duplicates
+    const existing = await getUserByEmail(email);
+    if (existing) {
+        return existing;
+    }
 
     const { error } = await supabase
         .from('users')

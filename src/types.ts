@@ -8,6 +8,8 @@ export interface Car {
   category: 'SUV' | 'Sedan' | 'Hatchback' | 'Luxury' | 'Sports';
   pricePerDay: number;
   description: string;
+  pricePerWeek?: number;
+  pricePerMonth?: number;
   imageUrl: string;
   features: string[];
   isAvailable: boolean;
