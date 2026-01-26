@@ -6,13 +6,16 @@ import { OwnerDashboard } from './components/OwnerDashboard';
 import { RenterMarketplace } from './components/RenterMarketplace';
 import { RenterHistory } from './components/RenterHistory';
 import { Login } from './components/Login';
+import { KYCVerification } from './components/KYCVerification';
 import { ToastProvider, useToast, ToastStyles } from './components/Toast';
-import { CarFront, UserCircle, LogOut } from 'lucide-react';
+import { CarFront, UserCircle, LogOut, Shield, CheckCircle, ChevronDown } from 'lucide-react';
 
 function AppContent() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [allCars, setAllCars] = useState<Car[]>([]);
   const [renterView, setRenterView] = useState<'marketplace' | 'history'>('marketplace');
+  const [showKYC, setShowKYC] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   const { showToast } = useToast();
 
@@ -36,6 +39,7 @@ function AppContent() {
     setCurrentUser(null);
     setAllCars([]);
     setRenterView('marketplace');
+    setShowProfileMenu(false);
     showToast('Você saiu do sistema.', 'info');
   };
 
@@ -70,15 +74,11 @@ function AppContent() {
 
       await createRental(carId, currentUser.id, car.ownerId, startDate, endDate, totalPrice);
 
-      // Atualizar lista localmente
       setAllCars(allCars.map(c =>
         c.id === carId ? { ...c, isAvailable: false } : c
       ));
 
       showToast(`Aluguel confirmado! Total: R$ ${totalPrice.toFixed(2)}`, 'success');
-
-      // Opcional: Redirecionar para histórico
-      // setRenterView('history'); 
     } catch (e) {
       console.error(e);
       showToast("Erro ao processar aluguel.", 'error');
@@ -91,6 +91,12 @@ function AppContent() {
     ));
   };
 
+  const handleKYCComplete = (updatedUser: User) => {
+    setCurrentUser(updatedUser);
+    setShowKYC(false);
+    showToast('Identidade verificada com sucesso!', 'success');
+  };
+
   if (!currentUser) {
     return <Login onLogin={handleLogin} />;
   }
@@ -99,6 +105,15 @@ function AppContent() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
+      {/* KYC Modal */}
+      {showKYC && (
+        <KYCVerification
+          user={currentUser}
+          onVerified={handleKYCComplete}
+          onClose={() => setShowKYC(false)}
+        />
+      )}
+
       {/* Navigation */}
       <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -111,7 +126,7 @@ function AppContent() {
                 VeloCity
               </span>
               <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium ml-2">
-                v2.0
+                v3.0
               </span>
             </div>
 
@@ -133,23 +148,66 @@ function AppContent() {
                 </div>
               )}
 
-              <div className="flex items-center gap-2 pl-4 border-l border-slate-200">
-                <UserCircle className="w-8 h-8 text-slate-400" />
-                <div className="hidden md:block text-right">
-                  <p className="text-sm font-medium text-slate-900">{currentUser.name}</p>
-                  <p className="text-xs text-slate-500 capitalize">
-                    {currentUser.role === 'owner' ? 'Locador' : 'Locatário'}
-                  </p>
-                </div>
-              </div>
+              {/* Profile Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowProfileMenu(!showProfileMenu)}
+                  className="flex items-center gap-2 pl-4 border-l border-slate-200 hover:bg-slate-50 p-2 rounded-lg transition"
+                >
+                  <UserCircle className="w-8 h-8 text-slate-400" />
+                  <div className="hidden md:block text-right">
+                    <div className="flex items-center gap-1">
+                      <p className="text-sm font-medium text-slate-900">{currentUser.name}</p>
+                      {currentUser.isVerified && (
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 capitalize">
+                      {currentUser.role === 'owner' ? 'Locador' : 'Locatário'}
+                    </p>
+                  </div>
+                  <ChevronDown className="w-4 h-4 text-slate-400" />
+                </button>
 
-              <button
-                onClick={handleLogout}
-                className="p-2 text-slate-400 hover:text-red-600 transition"
-                title="Sair"
-              >
-                <LogOut className="w-5 h-5" />
-              </button>
+                {/* Dropdown Menu */}
+                {showProfileMenu && (
+                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-50 animate-fade-in">
+                    <div className="px-4 py-3 border-b border-slate-100">
+                      <p className="font-medium text-slate-900">{currentUser.name}</p>
+                      <p className="text-sm text-slate-500">{currentUser.email}</p>
+                    </div>
+
+                    {/* Verification Status */}
+                    <div className="px-4 py-3 border-b border-slate-100">
+                      {currentUser.isVerified ? (
+                        <div className="flex items-center gap-2 text-green-600">
+                          <CheckCircle className="w-5 h-5" />
+                          <span className="text-sm font-medium">Identidade Verificada</span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => { setShowKYC(true); setShowProfileMenu(false); }}
+                          className="w-full flex items-center gap-2 text-amber-600 hover:bg-amber-50 p-2 rounded-lg transition"
+                        >
+                          <Shield className="w-5 h-5" />
+                          <div className="text-left">
+                            <p className="text-sm font-medium">Verificar Identidade</p>
+                            <p className="text-xs text-amber-500">Necessário para alugar</p>
+                          </div>
+                        </button>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={handleLogout}
+                      className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Sair da conta
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -198,7 +256,7 @@ function AppContent() {
       {/* Footer */}
       <footer className="bg-slate-900 text-slate-400 py-8 mt-auto">
         <div className="max-w-7xl mx-auto px-4 text-center">
-          <p className="text-white font-semibold">VeloCity v2.0</p>
+          <p className="text-white font-semibold">VeloCity v3.0</p>
           <p className="text-sm mt-1">Aluguel inteligente de veículos</p>
         </div>
       </footer>
