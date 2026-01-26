@@ -39,6 +39,27 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
 
   useEffect(() => {
     loadActiveRentals();
+
+    // Realtime Subscription
+    const channel = supabase
+      .channel('owner-dashboard-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'rentals' },
+        (payload) => {
+          console.log('Change received!', payload);
+          // Only reload if the change is relevant (simplification: simple reload)
+          loadActiveRentals();
+          if (payload.eventType === 'INSERT') {
+            showToast('Novo aluguel recebido!', 'success');
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user.id]);
 
   const loadActiveRentals = async () => {
