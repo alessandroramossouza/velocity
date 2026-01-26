@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { getCars, createCar } from './services/api';
+import { getCars, createCar, updateCar } from './services/api'; // Import updateCar
 import { Car, User } from './types';
 import { OwnerDashboard } from './components/OwnerDashboard';
 import { RenterMarketplace } from './components/RenterMarketplace';
@@ -39,6 +39,18 @@ export default function App() {
     } catch (e) {
       console.error(e);
       alert("Erro ao salvar carro");
+    }
+  };
+
+  // Nova função para atualizar
+  const handleUpdateCar = async (updatedCar: Car) => {
+    try {
+      const savedCar = await updateCar(updatedCar);
+      setAllCars(allCars.map(c => c.id === savedCar.id ? savedCar : c));
+      alert("Carro atualizado com sucesso!");
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao atualizar carro");
     }
   };
 
@@ -103,7 +115,12 @@ export default function App() {
         {currentUser.role === 'renter' ? (
           <RenterMarketplace cars={allCars} />
         ) : (
-          <OwnerDashboard user={currentUser} myCars={myCars} onAddCar={handleAddCar} />
+          <OwnerDashboard
+            user={currentUser}
+            myCars={myCars}
+            onAddCar={handleAddCar}
+            onUpdateCar={handleUpdateCar} // Passar função
+          />
         )}
       </main>
 

@@ -67,7 +67,46 @@ export const createCar = async (car: Omit<Car, 'id'>): Promise<Car> => {
     return data as unknown as Car;
 };
 
-// Nova função para login
+export const updateCar = async (car: Car): Promise<Car> => {
+    const dbPayload = {
+        make: car.make,
+        model: car.model,
+        year: car.year,
+        category: car.category,
+        price_per_day: car.pricePerDay,
+        description: car.description,
+        image_url: car.imageUrl,
+        features: car.features,
+        is_available: car.isAvailable
+    };
+
+    const { data, error } = await supabase
+        .from('cars')
+        .update(dbPayload)
+        .eq('id', car.id)
+        .select(`
+            id,
+            ownerId:owner_id,
+            make,
+            model,
+            year,
+            category,
+            pricePerDay:price_per_day,
+            description,
+            imageUrl:image_url,
+            features,
+            isAvailable:is_available
+        `)
+        .single();
+
+    if (error) {
+        console.error('Error updating car:', error);
+        throw new Error(error.message);
+    }
+
+    return data as unknown as Car;
+}
+
 export const getUserByEmail = async (email: string): Promise<User | null> => {
     const { data, error } = await supabase
         .from('users')
