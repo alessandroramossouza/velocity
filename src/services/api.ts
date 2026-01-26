@@ -186,7 +186,8 @@ export const completeRental = async (rentalId: string, carId: string | number): 
 };
 
 export const getActiveRentals = async (ownerId: string): Promise<Rental[]> => {
-    const { data, error } = await supabase
+    // 1. Fetch Rentals
+    const { data: rentalsData, error: rentalsError } = await supabase
         .from('rentals')
         .select(`
             id,
@@ -202,12 +203,40 @@ export const getActiveRentals = async (ownerId: string): Promise<Rental[]> => {
         .eq('owner_id', ownerId)
         .eq('status', 'active');
 
-    if (error) {
-        console.error('Error fetching rentals:', error);
+    if (rentalsError) {
+        console.error('Error fetching rentals:', rentalsError);
         return [];
     }
 
-    return data as Rental[];
+    if (!rentalsData || rentalsData.length === 0) {
+        return [];
+    }
+
+    const rentals = rentalsData as Rental[];
+
+    // 2. Fetch Renters (Users) logic
+    const renterIds = [...new Set(rentals.map(r => r.renterId))]; // Unique IDs
+
+    const { data: usersData, error: usersError } = await supabase
+        .from('users')
+        .select('id, name, email')
+        .in('id', renterIds);
+
+    if (usersError) {
+        console.error('Error fetching renters:', usersError);
+        // Return rentals without renter info if user fetch fails
+        return rentals;
+    }
+
+    // 3. Merge Data
+    const usersMap = new Map(usersData.map(u => [u.id, u]));
+
+    const mergedRentals = rentals.map(rental => ({
+        ...rental,
+        renter: usersMap.get(rental.renterId) // Attach user object
+    }));
+
+    return mergedRentals as Rental[];
 };
 
 export const getRenterHistory = async (renterId: string): Promise<Rental[]> => {

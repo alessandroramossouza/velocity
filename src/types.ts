@@ -33,6 +33,7 @@ export interface Rental {
   createdAt: string;
   // Joined data
   car?: Car;
+  renter?: User; // Dados do locatário
 }
 
 export interface Review {

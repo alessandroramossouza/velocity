@@ -327,19 +327,40 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
             {activeRentals.map(rental => {
               const car = getCarForRental(rental);
               return (
-                <div key={rental.id} className="bg-white p-3 rounded-lg flex justify-between items-center">
-                  <div>
-                    <p className="font-medium text-slate-800">{car ? `${car.make} ${car.model}` : 'Carro'}</p>
-                    <p className="text-xs text-slate-500">
-                      {new Date(rental.startDate).toLocaleDateString('pt-BR')} até {new Date(rental.endDate).toLocaleDateString('pt-BR')}
-                    </p>
+                <div key={rental.id} className="bg-white p-4 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border border-slate-100 shadow-sm">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-bold text-slate-800 text-lg">{car ? `${car.make} ${car.model}` : 'Carro não encontrado'}</span>
+                      <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">Alugado</span>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-4 mt-2 text-sm text-slate-600">
+                      <div className="flex items-center gap-1">
+                        <Calendar className="w-4 h-4 text-slate-400" />
+                        <span>{new Date(rental.startDate).toLocaleDateString('pt-BR')} até {new Date(rental.endDate).toLocaleDateString('pt-BR')}</span>
+                      </div>
+
+                      {/* Exibir Quem Alugou */}
+                      {rental.renter && (
+                        <div className="flex items-center gap-2 bg-slate-50 px-3 py-1 rounded-md border border-slate-200">
+                          <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-bold">
+                            {rental.renter.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex flex-col leading-tight">
+                            <span className="font-medium text-slate-900">{rental.renter.name}</span>
+                            <span className="text-xs text-slate-500">{rental.renter.email}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
+
                   <button
                     onClick={() => handleReturnCar(rental)}
-                    className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700"
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition w-full sm:w-auto justify-center"
                   >
                     <RotateCcw className="w-4 h-4" />
-                    Devolver
+                    Receber Devolução
                   </button>
                 </div>
               );
