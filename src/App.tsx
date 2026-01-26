@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { getCars, createCar, updateCar } from './services/api'; // Import updateCar
+import { getCars, createCar, updateCar, rentCar } from './services/api'; // Import rentCar
 import { Car, User } from './types';
 import { OwnerDashboard } from './components/OwnerDashboard';
 import { RenterMarketplace } from './components/RenterMarketplace';
@@ -42,7 +42,6 @@ export default function App() {
     }
   };
 
-  // Nova função para atualizar
   const handleUpdateCar = async (updatedCar: Car) => {
     try {
       const savedCar = await updateCar(updatedCar);
@@ -51,6 +50,25 @@ export default function App() {
     } catch (e) {
       console.error(e);
       alert("Erro ao atualizar carro");
+    }
+  };
+
+  // Função para alugar
+  const handleRentCar = async (carId: string) => {
+    try {
+      if (!confirm("Confirmar o aluguel deste veículo?")) return;
+
+      await rentCar(carId);
+
+      // Atualizar lista localmente
+      setAllCars(allCars.map(c =>
+        c.id === carId ? { ...c, isAvailable: false } : c
+      ));
+
+      alert("Sucesso! O carro foi alugado e já ficará indisponível para outros.");
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao alugar carro.");
     }
   };
 
@@ -113,13 +131,16 @@ export default function App() {
         </div>
 
         {currentUser.role === 'renter' ? (
-          <RenterMarketplace cars={allCars} />
+          <RenterMarketplace
+            cars={allCars}
+            onRentCar={handleRentCar} // Passar função
+          />
         ) : (
           <OwnerDashboard
             user={currentUser}
             myCars={myCars}
             onAddCar={handleAddCar}
-            onUpdateCar={handleUpdateCar} // Passar função
+            onUpdateCar={handleUpdateCar}
           />
         )}
       </main>

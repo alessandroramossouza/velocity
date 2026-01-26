@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Car, ChatMessage } from '../types';
 import { getCarRecommendations } from '../services/geminiService';
@@ -5,9 +6,10 @@ import { Search, MapPin, Filter, MessageCircle, Send, Loader2 } from 'lucide-rea
 
 interface RenterMarketplaceProps {
   cars: Car[];
+  onRentCar: (carId: string) => void; // Nova prop
 }
 
-export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars }) => {
+export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars, onRentCar }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredCars, setFilteredCars] = useState<Car[]>(cars);
   const [showAIChat, setShowAIChat] = useState(false);
@@ -17,6 +19,16 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars }) =>
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
 
+  // Sync filteredCars with cars prop when cars updates (important for availability update)
+  React.useEffect(() => {
+    // Re-apply filter if needed, or just sync
+    if (!searchTerm) {
+      setFilteredCars(cars);
+    } else {
+      handleSearch(searchTerm);
+    }
+  }, [cars, searchTerm]);
+
   // Simple text filter
   const handleSearch = (term: string) => {
     setSearchTerm(term);
@@ -25,9 +37,9 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars }) =>
       return;
     }
     const lower = term.toLowerCase();
-    setFilteredCars(cars.filter(c => 
-      c.make.toLowerCase().includes(lower) || 
-      c.model.toLowerCase().includes(lower) || 
+    setFilteredCars(cars.filter(c =>
+      c.make.toLowerCase().includes(lower) ||
+      c.model.toLowerCase().includes(lower) ||
       c.category.toLowerCase().includes(lower)
     ));
   };
@@ -42,22 +54,22 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars }) =>
 
     try {
       const recommendedIds = await getCarRecommendations(userMsg, cars);
-      
+
       if (recommendedIds.length > 0) {
         setFilteredCars(cars.filter(c => recommendedIds.includes(c.id)));
-        setChatMessages(prev => [...prev, { 
-          role: 'model', 
-          text: `Encontrei ${recommendedIds.length} carros perfeitos para você! Filtrei a lista abaixo.` 
+        setChatMessages(prev => [...prev, {
+          role: 'model',
+          text: `Encontrei ${recommendedIds.length} carros perfeitos para você! Filtrei a lista abaixo.`
         }]);
       } else {
-        setChatMessages(prev => [...prev, { 
-          role: 'model', 
-          text: 'Não encontrei carros exatos com esses critérios, mas dê uma olhada em nossa frota completa.' 
+        setChatMessages(prev => [...prev, {
+          role: 'model',
+          text: 'Não encontrei carros exatos com esses critérios, mas dê uma olhada em nossa frota completa.'
         }]);
         setFilteredCars(cars);
       }
     } catch (e) {
-       setChatMessages(prev => [...prev, { role: 'model', text: 'Desculpe, tive um problema ao processar. Tente novamente.' }]);
+      setChatMessages(prev => [...prev, { role: 'model', text: 'Desculpe, tive um problema ao processar. Tente novamente.' }]);
     } finally {
       setIsChatLoading(false);
     }
@@ -69,16 +81,16 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars }) =>
       <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="relative w-full md:w-96">
           <Search className="absolute left-3 top-3 text-slate-400 w-5 h-5" />
-          <input 
-            type="text" 
-            placeholder="Buscar por marca, modelo..." 
+          <input
+            type="text"
+            placeholder="Buscar por marca, modelo..."
             className="w-full pl-10 pr-4 py-2 border rounded-full bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             value={searchTerm}
             onChange={(e) => handleSearch(e.target.value)}
           />
         </div>
-        
-        <button 
+
+        <button
           onClick={() => setShowAIChat(!showAIChat)}
           className={`flex items-center gap-2 px-4 py-2 rounded-full transition ${showAIChat ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
         >
@@ -91,7 +103,7 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars }) =>
       {showAIChat && (
         <div className="bg-white rounded-xl shadow-lg border border-indigo-100 overflow-hidden animate-fade-in">
           <div className="bg-indigo-600 p-4 text-white flex justify-between items-center">
-            <span className="font-semibold flex items-center gap-2"><MessageCircle className="w-5 h-5"/> VeloCity Concierge</span>
+            <span className="font-semibold flex items-center gap-2"><MessageCircle className="w-5 h-5" /> VeloCity Concierge</span>
           </div>
           <div className="h-64 p-4 overflow-y-auto bg-slate-50 space-y-3">
             {chatMessages.map((msg, idx) => (
@@ -104,20 +116,20 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars }) =>
             {isChatLoading && <div className="text-slate-400 text-xs italic ml-2">Digitando...</div>}
           </div>
           <div className="p-3 bg-white border-t border-slate-100 flex gap-2">
-            <input 
-              type="text" 
+            <input
+              type="text"
               className="flex-1 border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
               placeholder="Ex: Carro econômico para andar na cidade..."
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
             />
-            <button 
-              onClick={handleSendMessage} 
+            <button
+              onClick={handleSendMessage}
               disabled={isChatLoading}
               className="bg-indigo-600 text-white p-2 rounded-md hover:bg-indigo-700 disabled:opacity-50"
             >
-              {isChatLoading ? <Loader2 className="w-5 h-5 animate-spin"/> : <Send className="w-5 h-5" />}
+              {isChatLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
             </button>
           </div>
         </div>
@@ -126,7 +138,7 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars }) =>
       {/* Car Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredCars.map(car => (
-          <div key={car.id} className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition border border-slate-200 group">
+          <div key={car.id} className={`bg-white rounded-xl overflow-hidden shadow-sm transition border border-slate-200 group ${!car.isAvailable ? 'opacity-75 grayscale' : 'hover:shadow-md'}`}>
             <div className="relative h-48 overflow-hidden">
               <img src={car.imageUrl} alt={car.model} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
               <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded text-xs font-bold text-slate-800">
@@ -144,7 +156,7 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars }) =>
                   <p className="text-xs text-slate-400">/dia</p>
                 </div>
               </div>
-              
+
               <div className="flex flex-wrap gap-2 mb-4">
                 {car.features.slice(0, 3).map((feat, i) => (
                   <span key={i} className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-md">
@@ -157,8 +169,15 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars }) =>
                 "{car.description}"
               </p>
 
-              <button className="w-full bg-slate-900 text-white py-2 rounded-lg font-medium hover:bg-slate-800 transition">
-                Alugar Agora
+              <button
+                onClick={() => onRentCar(car.id)}
+                disabled={!car.isAvailable}
+                className={`w-full py-2 rounded-lg font-medium transition
+                    ${car.isAvailable
+                    ? 'bg-slate-900 text-white hover:bg-slate-800'
+                    : 'bg-slate-200 text-slate-500 cursor-not-allowed'}`}
+              >
+                {car.isAvailable ? 'Alugar Agora' : 'Indisponível (Alugado)'}
               </button>
             </div>
           </div>

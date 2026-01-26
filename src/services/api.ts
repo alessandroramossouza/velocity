@@ -107,6 +107,18 @@ export const updateCar = async (car: Car): Promise<Car> => {
     return data as unknown as Car;
 }
 
+export const rentCar = async (carId: string): Promise<void> => {
+    const { error } = await supabase
+        .from('cars')
+        .update({ is_available: false })
+        .eq('id', carId);
+
+    if (error) {
+        console.error('Error renting car:', error);
+        throw new Error(error.message);
+    }
+};
+
 export const getUserByEmail = async (email: string): Promise<User | null> => {
     const { data, error } = await supabase
         .from('users')
