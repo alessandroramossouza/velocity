@@ -1,15 +1,18 @@
 
-import React, { useState } from 'react';
-import { Car, ChatMessage } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Car, ChatMessage, User } from '../types';
 import { getCarRecommendations } from '../services/geminiService';
-import { Search, MapPin, Filter, MessageCircle, Send, Loader2 } from 'lucide-react';
+import { addFavorite, removeFavorite, getFavorites } from '../services/api';
+import { Search, MessageCircle, Send, Loader2, Heart, Star } from 'lucide-react';
+import { RentModal } from './RentModal';
 
 interface RenterMarketplaceProps {
   cars: Car[];
-  onRentCar: (carId: string) => void; // Nova prop
+  currentUser: User;
+  onRentCar: (carId: string | number, startDate: string, endDate: string, totalPrice: number) => Promise<void>;
 }
 
-export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars, onRentCar }) => {
+export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars, currentUser, onRentCar }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredCars, setFilteredCars] = useState<Car[]>(cars);
   const [showAIChat, setShowAIChat] = useState(false);
@@ -19,29 +22,60 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars, onRe
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
 
-  // Sync filteredCars with cars prop when cars updates (important for availability update)
-  React.useEffect(() => {
-    // Re-apply filter if needed, or just sync
-    if (!searchTerm) {
-      setFilteredCars(cars);
-    } else {
-      handleSearch(searchTerm);
-    }
-  }, [cars, searchTerm]);
+  // New states
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [selectedCar, setSelectedCar] = useState<Car | null>(null);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
-  // Simple text filter
+  // Load favorites on mount
+  useEffect(() => {
+    loadFavorites();
+  }, [currentUser.id]);
+
+  const loadFavorites = async () => {
+    const favs = await getFavorites(currentUser.id);
+    setFavorites(favs);
+  };
+
+  // Sync filteredCars with cars prop
+  useEffect(() => {
+    applyFilters();
+  }, [cars, searchTerm, showFavoritesOnly, favorites]);
+
+  const applyFilters = () => {
+    let result = cars;
+
+    // Text filter
+    if (searchTerm) {
+      const lower = searchTerm.toLowerCase();
+      result = result.filter(c =>
+        c.make.toLowerCase().includes(lower) ||
+        c.model.toLowerCase().includes(lower) ||
+        c.category.toLowerCase().includes(lower)
+      );
+    }
+
+    // Favorites filter
+    if (showFavoritesOnly) {
+      result = result.filter(c => favorites.includes(String(c.id)));
+    }
+
+    setFilteredCars(result);
+  };
+
   const handleSearch = (term: string) => {
     setSearchTerm(term);
-    if (!term) {
-      setFilteredCars(cars);
-      return;
+  };
+
+  const toggleFavorite = async (carId: string | number) => {
+    const carIdStr = String(carId);
+    if (favorites.includes(carIdStr)) {
+      await removeFavorite(currentUser.id, carId);
+      setFavorites(favorites.filter(f => f !== carIdStr));
+    } else {
+      await addFavorite(currentUser.id, carId);
+      setFavorites([...favorites, carIdStr]);
     }
-    const lower = term.toLowerCase();
-    setFilteredCars(cars.filter(c =>
-      c.make.toLowerCase().includes(lower) ||
-      c.model.toLowerCase().includes(lower) ||
-      c.category.toLowerCase().includes(lower)
-    ));
   };
 
   const handleSendMessage = async () => {
@@ -75,6 +109,12 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars, onRe
     }
   };
 
+  const handleRentConfirm = async (startDate: string, endDate: string, totalPrice: number) => {
+    if (!selectedCar) return;
+    await onRentCar(selectedCar.id, startDate, endDate, totalPrice);
+    setSelectedCar(null);
+  };
+
   return (
     <div className="space-y-6">
       {/* Search Header */}
@@ -90,13 +130,23 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars, onRe
           />
         </div>
 
-        <button
-          onClick={() => setShowAIChat(!showAIChat)}
-          className={`flex items-center gap-2 px-4 py-2 rounded-full transition ${showAIChat ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-        >
-          <MessageCircle className="w-5 h-5" />
-          {showAIChat ? 'Fechar Concierge IA' : 'Concierge IA'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full transition ${showFavoritesOnly ? 'bg-pink-500 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+          >
+            <Heart className={`w-5 h-5 ${showFavoritesOnly ? 'fill-white' : ''}`} />
+            Favoritos ({favorites.length})
+          </button>
+
+          <button
+            onClick={() => setShowAIChat(!showAIChat)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full transition ${showAIChat ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+          >
+            <MessageCircle className="w-5 h-5" />
+            {showAIChat ? 'Fechar IA' : 'Concierge IA'}
+          </button>
+        </div>
       </div>
 
       {/* AI Chat Interface */}
@@ -137,57 +187,88 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars, onRe
 
       {/* Car Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredCars.map(car => (
-          <div key={car.id} className={`bg-white rounded-xl overflow-hidden shadow-sm transition border border-slate-200 group ${!car.isAvailable ? 'opacity-75 grayscale' : 'hover:shadow-md'}`}>
-            <div className="relative h-48 overflow-hidden">
-              <img src={car.imageUrl} alt={car.model} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
-              <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded text-xs font-bold text-slate-800">
-                {car.year}
+        {filteredCars.map(car => {
+          const isFavorite = favorites.includes(String(car.id));
+
+          return (
+            <div key={car.id} className={`bg-white rounded-xl overflow-hidden shadow-sm transition border border-slate-200 group ${!car.isAvailable ? 'opacity-60' : 'hover:shadow-lg'}`}>
+              <div className="relative h-48 overflow-hidden">
+                <img src={car.imageUrl} alt={car.model} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded text-xs font-bold text-slate-800">
+                  {car.year}
+                </div>
+
+                {/* Favorite Button */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); toggleFavorite(car.id); }}
+                  className="absolute top-3 left-3 p-2 bg-white/90 backdrop-blur-sm rounded-full hover:scale-110 transition"
+                >
+                  <Heart className={`w-5 h-5 ${isFavorite ? 'fill-pink-500 text-pink-500' : 'text-slate-400'}`} />
+                </button>
+
+                {/* Rating Badge */}
+                {car.averageRating && (
+                  <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full flex items-center gap-1">
+                    <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                    <span className="text-xs font-bold text-slate-800">{car.averageRating.toFixed(1)}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-5">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">{car.make} {car.model}</h3>
+                    <p className="text-sm text-slate-500">{car.category}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-indigo-600">R$ {car.pricePerDay}</p>
+                    <p className="text-xs text-slate-400">/dia</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {car.features.slice(0, 3).map((feat, i) => (
+                    <span key={i} className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-md">
+                      {feat}
+                    </span>
+                  ))}
+                </div>
+
+                <p className="text-sm text-slate-600 mb-4 line-clamp-2 italic">
+                  "{car.description}"
+                </p>
+
+                <button
+                  onClick={() => setSelectedCar(car)}
+                  disabled={!car.isAvailable}
+                  className={`w-full py-3 rounded-lg font-medium transition
+                      ${car.isAvailable
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      : 'bg-slate-200 text-slate-500 cursor-not-allowed'}`}
+                >
+                  {car.isAvailable ? 'Alugar Agora' : 'Indisponível'}
+                </button>
               </div>
             </div>
-            <div className="p-5">
-              <div className="flex justify-between items-start mb-2">
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900">{car.make} {car.model}</h3>
-                  <p className="text-sm text-slate-500">{car.category}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-lg font-bold text-indigo-600">R$ {car.pricePerDay}</p>
-                  <p className="text-xs text-slate-400">/dia</p>
-                </div>
-              </div>
+          );
+        })}
 
-              <div className="flex flex-wrap gap-2 mb-4">
-                {car.features.slice(0, 3).map((feat, i) => (
-                  <span key={i} className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-md">
-                    {feat}
-                  </span>
-                ))}
-              </div>
-
-              <p className="text-sm text-slate-600 mb-4 line-clamp-2 italic">
-                "{car.description}"
-              </p>
-
-              <button
-                onClick={() => onRentCar(car.id)}
-                disabled={!car.isAvailable}
-                className={`w-full py-2 rounded-lg font-medium transition
-                    ${car.isAvailable
-                    ? 'bg-slate-900 text-white hover:bg-slate-800'
-                    : 'bg-slate-200 text-slate-500 cursor-not-allowed'}`}
-              >
-                {car.isAvailable ? 'Alugar Agora' : 'Indisponível (Alugado)'}
-              </button>
-            </div>
-          </div>
-        ))}
         {filteredCars.length === 0 && (
           <div className="col-span-full text-center py-12 text-slate-500">
             Nenhum carro encontrado. Tente ajustar os filtros ou fale com o Concierge.
           </div>
         )}
       </div>
+
+      {/* Rent Modal */}
+      {selectedCar && (
+        <RentModal
+          car={selectedCar}
+          onConfirm={handleRentConfirm}
+          onClose={() => setSelectedCar(null)}
+        />
+      )}
     </div>
   );
 };

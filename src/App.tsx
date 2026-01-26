@@ -1,15 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
-import { getCars, createCar, updateCar, rentCar } from './services/api'; // Import rentCar
+import { getCars, createCar, updateCar, createRental, setCarAvailability } from './services/api';
 import { Car, User } from './types';
 import { OwnerDashboard } from './components/OwnerDashboard';
 import { RenterMarketplace } from './components/RenterMarketplace';
 import { Login } from './components/Login';
+import { ToastProvider, useToast, ToastStyles } from './components/Toast';
 import { CarFront, UserCircle, LogOut } from 'lucide-react';
 
-export default function App() {
+function AppContent() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [allCars, setAllCars] = useState<Car[]>([]);
+  const { showToast } = useToast();
 
   useEffect(() => {
     if (currentUser) {
@@ -24,21 +26,22 @@ export default function App() {
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
+    showToast(`Bem-vindo(a), ${user.name}!`, 'success');
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
     setAllCars([]);
+    showToast('Você saiu do sistema.', 'info');
   };
 
   const handleAddCar = async (newCar: Omit<Car, 'id'>) => {
     try {
       const savedCar = await createCar(newCar);
       setAllCars([...allCars, savedCar]);
-      alert("Carro cadastrado com sucesso!");
     } catch (e) {
       console.error(e);
-      alert("Erro ao salvar carro");
+      showToast("Erro ao salvar carro", 'error');
     }
   };
 
@@ -46,37 +49,45 @@ export default function App() {
     try {
       const savedCar = await updateCar(updatedCar);
       setAllCars(allCars.map(c => c.id === savedCar.id ? savedCar : c));
-      alert("Carro atualizado com sucesso!");
     } catch (e) {
       console.error(e);
-      alert("Erro ao atualizar carro");
+      showToast("Erro ao atualizar carro", 'error');
     }
   };
 
-  // Função para alugar
-  const handleRentCar = async (carId: string) => {
-    try {
-      if (!confirm("Confirmar o aluguel deste veículo?")) return;
+  // Nova função completa para alugar com datas
+  const handleRentCar = async (carId: string | number, startDate: string, endDate: string, totalPrice: number) => {
+    if (!currentUser) return;
 
-      await rentCar(carId);
+    try {
+      const car = allCars.find(c => c.id === carId);
+      if (!car) throw new Error('Carro não encontrado');
+
+      await createRental(carId, currentUser.id, car.ownerId, startDate, endDate, totalPrice);
 
       // Atualizar lista localmente
       setAllCars(allCars.map(c =>
         c.id === carId ? { ...c, isAvailable: false } : c
       ));
 
-      alert("Sucesso! O carro foi alugado e já ficará indisponível para outros.");
+      showToast(`Aluguel confirmado! Total: R$ ${totalPrice.toFixed(2)}`, 'success');
     } catch (e) {
       console.error(e);
-      alert("Erro ao alugar carro.");
+      showToast("Erro ao processar aluguel.", 'error');
     }
+  };
+
+  // Quando carro é devolvido
+  const handleCarReturned = (carId: string | number) => {
+    setAllCars(allCars.map(c =>
+      c.id === carId ? { ...c, isAvailable: true } : c
+    ));
   };
 
   if (!currentUser) {
     return <Login onLogin={handleLogin} />;
   }
 
-  // Filtrar carros para o dono ver apenas os dele
   const myCars = allCars.filter(c => c.ownerId === currentUser.id);
 
   return (
@@ -92,6 +103,9 @@ export default function App() {
               <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600">
                 VeloCity
               </span>
+              <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium ml-2">
+                v2.0
+              </span>
             </div>
 
             <div className="flex items-center gap-4">
@@ -99,8 +113,8 @@ export default function App() {
                 <UserCircle className="w-8 h-8 text-slate-400" />
                 <div className="hidden md:block text-right">
                   <p className="text-sm font-medium text-slate-900">{currentUser.name}</p>
-                  <p className="text-xs text-slate-500 capitalize">
-                    {currentUser.role === 'owner' ? 'Locador (Dono)' : 'Locatário (Cliente)'}
+                  <p className="text-xs text-slate-500">
+                    {currentUser.role === 'owner' ? 'Locador' : 'Locatário'}
                   </p>
                 </div>
               </div>
@@ -125,15 +139,16 @@ export default function App() {
           </h1>
           <p className="text-slate-500 mt-2">
             {currentUser.role === 'renter'
-              ? 'Explore nossa frota ou peça ajuda ao nosso Concierge IA.'
-              : 'Gerencie seus veículos, veja rendimentos e use a IA para precificar.'}
+              ? 'Explore nossa frota, favorite carros e alugue com calendário integrado.'
+              : 'Gerencie veículos, acompanhe aluguéis ativos e use IA para precificar.'}
           </p>
         </div>
 
         {currentUser.role === 'renter' ? (
           <RenterMarketplace
             cars={allCars}
-            onRentCar={handleRentCar} // Passar função
+            currentUser={currentUser}
+            onRentCar={handleRentCar}
           />
         ) : (
           <OwnerDashboard
@@ -141,16 +156,28 @@ export default function App() {
             myCars={myCars}
             onAddCar={handleAddCar}
             onUpdateCar={handleUpdateCar}
+            onCarReturned={handleCarReturned}
+            showToast={showToast}
           />
         )}
       </main>
 
       {/* Footer */}
-      <footer className="bg-slate-900 text-slate-400 py-12">
+      <footer className="bg-slate-900 text-slate-400 py-8">
         <div className="max-w-7xl mx-auto px-4 text-center">
-          <p className="mb-4 text-white font-semibold">VeloCity &copy; 2024</p>
+          <p className="text-white font-semibold">VeloCity v2.0</p>
+          <p className="text-sm mt-1">Aluguel inteligente de veículos</p>
         </div>
       </footer>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ToastProvider>
+      <ToastStyles />
+      <AppContent />
+    </ToastProvider>
   );
 }
