@@ -391,6 +391,23 @@ export const getUserByEmail = async (email: string): Promise<User | null> => {
     };
 };
 
+export const registerUser = async (email: string, name: string, role: 'owner' | 'renter'): Promise<User> => {
+    // Generate a simple ID or let DB generate if using uuid.
+    // Our DB uses text ID. Let's use timestamp or random string.
+    const id = Math.random().toString(36).substr(2, 9);
+
+    const { error } = await supabase
+        .from('users')
+        .insert({ id, email, name, role });
+
+    if (error) {
+        console.error('Error creating user:', error);
+        throw new Error(error.message);
+    }
+
+    return { id, email, name, role };
+};
+
 // Legacy function (kept for compatibility)
 export const rentCar = async (carId: string): Promise<void> => {
     await setCarAvailability(carId, false);
