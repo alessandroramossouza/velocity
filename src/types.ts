@@ -19,7 +19,7 @@ export interface Car {
 export interface User {
   id: string;
   name: string;
-  role: 'owner' | 'renter';
+  role: 'owner' | 'renter' | 'partner';
   email: string;
   // KYC Fields
   cnhUrl?: string;
@@ -94,6 +94,7 @@ export interface ChatMessage {
 
 export interface Partner {
   id: string;
+  userId?: string;
   name: string;
   type: 'mechanic' | 'insurance';
   description: string;
@@ -101,4 +102,22 @@ export interface Partner {
   rating: number;
   imageUrl: string;
   benefits: string[];
+  status?: 'pending' | 'active' | 'rejected';
+  address?: string;
+  serviceArea?: string;
+  website?: string;
+}
+
+export interface ServiceRequest {
+  id: string;
+  ownerId: string;
+  partnerId: string;
+  serviceType: 'maintenance' | 'insurance_quote' | 'emergency' | 'general';
+  status: 'pending' | 'accepted' | 'completed' | 'rejected' | 'cancelled';
+  notes?: string;
+  createdAt: string;
+  updatedAt?: string;
+  // Joined data
+  owner?: User;
+  partner?: Partner;
 }

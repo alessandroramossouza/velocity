@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Car, User, Rental, Partner } from '../types';
+import { Car, User, Rental, Partner, ServiceRequest } from '../types';
 import { analyzeCarListing } from '../services/geminiService';
-import { getActiveRentals, completeRental, getOwnerRentalHistory, getPartners } from '../services/api';
+import { getActiveRentals, completeRental, getOwnerRentalHistory, getPartners, createServiceRequest, getOwnerServiceRequests } from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import {
   Sparkles, Plus, Car as CarIcon, DollarSign, Loader2, Upload, Pencil, RotateCcw,
@@ -28,6 +28,10 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [partners, setPartners] = useState<Partner[]>([]);
   const [loadingPartners, setLoadingPartners] = useState(false);
+  const [myServiceRequests, setMyServiceRequests] = useState<ServiceRequest[]>([]);
+  const [showRequestModal, setShowRequestModal] = useState<Partner | null>(null);
+  const [requestNotes, setRequestNotes] = useState('');
+  const [sendingRequest, setSendingRequest] = useState(false);
 
   // Date Filters
   const [filterStartDate, setFilterStartDate] = useState('');
@@ -119,7 +123,26 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
     } else {
       setPartners(data);
     }
+    // Also load owner's service requests
+    const requests = await getOwnerServiceRequests(user.id);
+    setMyServiceRequests(requests);
     setLoadingPartners(false);
+  };
+
+  const handleRequestService = async (partner: Partner, serviceType: ServiceRequest['serviceType']) => {
+    setSendingRequest(true);
+    const result = await createServiceRequest(user.id, partner.id, serviceType, requestNotes);
+    if (result) {
+      showToast(`Solicitação enviada para ${partner.name}!`, 'success');
+      setShowRequestModal(null);
+      setRequestNotes('');
+      // Reload requests
+      const requests = await getOwnerServiceRequests(user.id);
+      setMyServiceRequests(requests);
+    } else {
+      showToast('Erro ao enviar solicitação.', 'error');
+    }
+    setSendingRequest(false);
   };
 
   const startEditing = (car: Car) => {
@@ -638,6 +661,87 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
             <p className="text-slate-500">Mecânicas e Seguros recomendados para manter sua frota em dia.</p>
           </div>
 
+          {/* Service Request Modal */}
+          {showRequestModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+              <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4 animate-fade-in">
+                <h3 className="text-lg font-bold text-slate-800 mb-4">
+                  Solicitar Serviço de {showRequestModal.name}
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de Serviço</label>
+                    <select id="serviceType" className="w-full p-3 border rounded-lg" defaultValue={showRequestModal.type === 'mechanic' ? 'maintenance' : 'insurance_quote'}>
+                      <option value="maintenance">Manutenção</option>
+                      <option value="insurance_quote">Cotação de Seguro</option>
+                      <option value="emergency">Emergência</option>
+                      <option value="general">Outro</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Observações (opcional)</label>
+                    <textarea
+                      value={requestNotes}
+                      onChange={e => setRequestNotes(e.target.value)}
+                      rows={3}
+                      className="w-full p-3 border rounded-lg"
+                      placeholder="Descreva o que você precisa..."
+                    />
+                  </div>
+                  <div className="flex gap-3 mt-6">
+                    <button
+                      onClick={() => setShowRequestModal(null)}
+                      className="flex-1 py-3 border border-slate-300 rounded-lg text-slate-700 font-medium hover:bg-slate-50 transition"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={() => {
+                        const select = document.getElementById('serviceType') as HTMLSelectElement;
+                        handleRequestService(showRequestModal, select.value as ServiceRequest['serviceType']);
+                      }}
+                      disabled={sendingRequest}
+                      className="flex-1 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition flex items-center justify-center gap-2"
+                    >
+                      {sendingRequest ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
+                      Enviar Solicitação
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* My Service Requests */}
+          {myServiceRequests.length > 0 && (
+            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-6 mb-6">
+              <h4 className="font-semibold text-indigo-900 mb-4 flex items-center gap-2">
+                <AlertCircle className="w-5 h-5" />
+                Minhas Solicitações ({myServiceRequests.length})
+              </h4>
+              <div className="space-y-3">
+                {myServiceRequests.slice(0, 5).map(req => {
+                  const partner = partners.find(p => p.id === req.partnerId);
+                  return (
+                    <div key={req.id} className="bg-white p-3 rounded-lg flex justify-between items-center border border-slate-100">
+                      <div>
+                        <p className="font-medium text-slate-800">{partner?.name || 'Parceiro'}</p>
+                        <p className="text-xs text-slate-500">{req.serviceType} • {new Date(req.createdAt).toLocaleDateString()}</p>
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${req.status === 'pending' ? 'bg-orange-100 text-orange-700' :
+                          req.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                            req.status === 'completed' ? 'bg-blue-100 text-blue-700' :
+                              'bg-red-100 text-red-700'
+                        }`}>
+                        {req.status === 'pending' ? 'Pendente' : req.status === 'accepted' ? 'Aceito' : req.status === 'completed' ? 'Concluído' : 'Recusado'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {loadingPartners ? (
             <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>
           ) : (
@@ -669,8 +773,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
                         </div>
                         <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center">
                           <span className="text-xs font-semibold text-slate-400">{partner.contactInfo}</span>
-                          <button onClick={() => showToast(`Contato solicitado para ${partner.name}!`, 'success')} className="text-sm text-indigo-600 font-bold hover:underline">
-                            Falar Agora
+                          <button onClick={() => setShowRequestModal(partner)} className="text-sm bg-indigo-600 text-white px-4 py-1.5 rounded-full font-bold hover:bg-indigo-700 transition">
+                            Solicitar Serviço
                           </button>
                         </div>
                       </div>
@@ -706,8 +810,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
                         </div>
                         <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center">
                           <span className="text-xs font-semibold text-slate-400">{partner.contactInfo}</span>
-                          <button onClick={() => showToast(`Cotação solicitada para ${partner.name}!`, 'success')} className="text-sm text-indigo-600 font-bold hover:underline">
-                            Cotar
+                          <button onClick={() => setShowRequestModal(partner)} className="text-sm bg-green-600 text-white px-4 py-1.5 rounded-full font-bold hover:bg-green-700 transition">
+                            Solicitar Cotação
                           </button>
                         </div>
                       </div>

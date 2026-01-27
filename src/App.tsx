@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { getCars, createCar, updateCar, createRental, setCarAvailability } from './services/api';
 import { Car, User } from './types';
 import { OwnerDashboard } from './components/OwnerDashboard';
+import { PartnerDashboard } from './components/PartnerDashboard';
 import { RenterMarketplace } from './components/RenterMarketplace';
 import { RenterHistory } from './components/RenterHistory';
 import { Login } from './components/Login';
@@ -220,14 +221,18 @@ function AppContent() {
           <h1 className="text-3xl font-bold text-slate-900">
             {currentUser.role === 'renter'
               ? (renterView === 'marketplace' ? 'Encontre seu próximo carro' : 'Histórico de Viagens')
-              : 'Painel do Locador'}
+              : currentUser.role === 'partner'
+                ? 'Portal do Parceiro'
+                : 'Painel do Locador'}
           </h1>
           <p className="text-slate-500 mt-2">
             {currentUser.role === 'renter'
               ? (renterView === 'marketplace'
                 ? 'Explore nossa frota premium e reserve em segundos.'
                 : 'Acompanhe seus aluguéis ativos e consulte o histórico.')
-              : 'Gerencie seus veículos, acompanhe aluguéis ativos e fature mais.'}
+              : currentUser.role === 'partner'
+                ? 'Gerencie suas solicitações de serviço e perfil de parceiro.'
+                : 'Gerencie seus veículos, acompanhe aluguéis ativos e fature mais.'}
           </p>
         </div >
 
@@ -242,6 +247,11 @@ function AppContent() {
             ) : (
               <RenterHistory currentUser={currentUser} />
             )
+          ) : currentUser.role === 'partner' ? (
+            <PartnerDashboard
+              user={currentUser}
+              showToast={showToast}
+            />
           ) : (
             <OwnerDashboard
               user={currentUser}

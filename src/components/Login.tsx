@@ -12,7 +12,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
     const [mode, setMode] = useState<'login' | 'register'>('login');
     const [email, setEmail] = useState('');
     const [name, setName] = useState('');
-    const [role, setRole] = useState<'owner' | 'renter'>('renter');
+    const [role, setRole] = useState<'owner' | 'renter' | 'partner'>('renter');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -101,11 +101,12 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                             <label className="block text-sm font-medium text-slate-700 mb-1">Quero...</label>
                             <select
                                 value={role}
-                                onChange={(e) => setRole(e.target.value as 'owner' | 'renter')}
+                                onChange={(e) => setRole(e.target.value as 'owner' | 'renter' | 'partner')}
                                 className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none"
                             >
                                 <option value="renter">Alugar Carros (Locatário)</option>
                                 <option value="owner">Alugar meus Carros (Locador)</option>
+                                <option value="partner">Oferecer Serviços (Mecânica/Seguro)</option>
                             </select>
                         </div>
                     )}

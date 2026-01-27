@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { Car, User, Rental, Review, Favorite, Partner } from '../types';
+import { Car, User, Rental, Review, Favorite, Partner, ServiceRequest } from '../types';
 
 // ============================================
 // CARS
@@ -507,14 +507,20 @@ export const getPartners = async (): Promise<Partner[]> => {
         .from('partners')
         .select(`
             id,
+            userId:user_id,
             name,
             type,
             description,
             contactInfo:contact_info,
             rating,
             imageUrl:image_url,
-            benefits
-        `);
+            benefits,
+            status,
+            address,
+            serviceArea:service_area,
+            website
+        `)
+        .eq('status', 'active');
 
     if (error) {
         console.error('Error fetching partners:', error);
@@ -522,4 +528,183 @@ export const getPartners = async (): Promise<Partner[]> => {
     }
 
     return data as unknown as Partner[];
+};
+
+// Get partner profile by user_id
+export const getPartnerByUserId = async (userId: string): Promise<Partner | null> => {
+    const { data, error } = await supabase
+        .from('partners')
+        .select(`
+            id,
+            userId:user_id,
+            name,
+            type,
+            description,
+            contactInfo:contact_info,
+            rating,
+            imageUrl:image_url,
+            benefits,
+            status,
+            address,
+            serviceArea:service_area,
+            website
+        `)
+        .eq('user_id', userId)
+        .single();
+
+    if (error) {
+        console.error('Error fetching partner by user_id:', error);
+        return null;
+    }
+
+    return data as unknown as Partner;
+};
+
+// Create or update partner profile
+export const upsertPartnerProfile = async (partner: Partial<Partner> & { userId: string }): Promise<Partner | null> => {
+    const dbPayload = {
+        user_id: partner.userId,
+        name: partner.name,
+        type: partner.type,
+        description: partner.description,
+        contact_info: partner.contactInfo,
+        rating: partner.rating || 5.0,
+        image_url: partner.imageUrl,
+        benefits: partner.benefits || [],
+        status: partner.status || 'active',
+        address: partner.address,
+        service_area: partner.serviceArea,
+        website: partner.website
+    };
+
+    const { data, error } = await supabase
+        .from('partners')
+        .upsert(dbPayload, { onConflict: 'user_id' })
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error upserting partner profile:', error);
+        return null;
+    }
+
+    return data as unknown as Partner;
+};
+
+// ============================================
+// SERVICE REQUESTS
+// ============================================
+
+export const createServiceRequest = async (
+    ownerId: string,
+    partnerId: string,
+    serviceType: ServiceRequest['serviceType'],
+    notes?: string
+): Promise<ServiceRequest | null> => {
+    const { data, error } = await supabase
+        .from('service_requests')
+        .insert({
+            owner_id: ownerId,
+            partner_id: partnerId,
+            service_type: serviceType,
+            notes,
+            status: 'pending'
+        })
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error creating service request:', error);
+        return null;
+    }
+
+    return {
+        id: data.id,
+        ownerId: data.owner_id,
+        partnerId: data.partner_id,
+        serviceType: data.service_type,
+        status: data.status,
+        notes: data.notes,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at
+    };
+};
+
+export const getOwnerServiceRequests = async (ownerId: string): Promise<ServiceRequest[]> => {
+    const { data, error } = await supabase
+        .from('service_requests')
+        .select(`
+            id,
+            ownerId:owner_id,
+            partnerId:partner_id,
+            serviceType:service_type,
+            status,
+            notes,
+            createdAt:created_at,
+            updatedAt:updated_at
+        `)
+        .eq('owner_id', ownerId)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching owner service requests:', error);
+        return [];
+    }
+
+    return data as unknown as ServiceRequest[];
+};
+
+export const getPartnerServiceRequests = async (partnerId: string): Promise<ServiceRequest[]> => {
+    const { data: requestsData, error: requestsError } = await supabase
+        .from('service_requests')
+        .select(`
+            id,
+            ownerId:owner_id,
+            partnerId:partner_id,
+            serviceType:service_type,
+            status,
+            notes,
+            createdAt:created_at,
+            updatedAt:updated_at
+        `)
+        .eq('partner_id', partnerId)
+        .order('created_at', { ascending: false });
+
+    if (requestsError) {
+        console.error('Error fetching partner service requests:', requestsError);
+        return [];
+    }
+
+    if (!requestsData || requestsData.length === 0) return [];
+
+    // Fetch owner details
+    const ownerIds = [...new Set(requestsData.map((r: any) => r.ownerId))];
+    const { data: ownersData } = await supabase
+        .from('users')
+        .select('id, name, email')
+        .in('id', ownerIds);
+
+    const ownersMap = new Map(ownersData?.map(o => [o.id, o]) || []);
+
+    return requestsData.map((r: any) => ({
+        ...r,
+        owner: ownersMap.get(r.ownerId)
+    })) as ServiceRequest[];
+};
+
+export const updateServiceRequestStatus = async (
+    requestId: string,
+    status: ServiceRequest['status']
+): Promise<boolean> => {
+    const { error } = await supabase
+        .from('service_requests')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', requestId);
+
+    if (error) {
+        console.error('Error updating service request status:', error);
+        return false;
+    }
+
+    return true;
 };
