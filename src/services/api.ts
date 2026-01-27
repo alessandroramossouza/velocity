@@ -577,11 +577,35 @@ export const upsertPartnerProfile = async (partner: Partial<Partner> & { userId:
         website: partner.website
     };
 
-    const { data, error } = await supabase
+    // First check if partner exists for this user
+    const { data: existingPartner } = await supabase
         .from('partners')
-        .upsert(dbPayload, { onConflict: 'user_id' })
-        .select()
+        .select('id')
+        .eq('user_id', partner.userId)
         .single();
+
+    let data, error;
+
+    if (existingPartner) {
+        // UPDATE existing partner
+        const result = await supabase
+            .from('partners')
+            .update(dbPayload)
+            .eq('user_id', partner.userId)
+            .select()
+            .single();
+        data = result.data;
+        error = result.error;
+    } else {
+        // INSERT new partner
+        const result = await supabase
+            .from('partners')
+            .insert(dbPayload)
+            .select()
+            .single();
+        data = result.data;
+        error = result.error;
+    }
 
     if (error) {
         console.error('Error upserting partner profile:', error);
