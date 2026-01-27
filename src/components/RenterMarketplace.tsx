@@ -5,7 +5,7 @@ import { getCarRecommendations } from '../services/geminiService';
 import { addFavorite, removeFavorite, getFavorites } from '../services/api';
 import {
   Search, MessageCircle, Send, Loader2, Heart, Star, Share2, Copy, Check,
-  ArrowUpDown, Filter, X, Car as CarIcon, Sparkles
+  ArrowUpDown, Filter, X, Car as CarIcon, Sparkles, Eye, Calendar, Fuel, Gauge, MapPin, Shield, Info
 } from 'lucide-react';
 import { RentModal } from './RentModal';
 
@@ -35,6 +35,7 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars, curr
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [shareCarId, setShareCarId] = useState<string | number | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [detailsCar, setDetailsCar] = useState<Car | null>(null);
 
   // Category filter
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -402,16 +403,25 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars, curr
                   "{car.description}"
                 </p>
 
-                <button
-                  onClick={() => setSelectedCar(car)}
-                  disabled={!car.isAvailable}
-                  className={`w-full py-3 rounded-lg font-medium transition
-                      ${car.isAvailable
-                      ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                      : 'bg-slate-200 text-slate-500 cursor-not-allowed'}`}
-                >
-                  {car.isAvailable ? 'Alugar Agora' : 'Indisponível'}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setDetailsCar(car)}
+                    className="flex-1 py-3 rounded-lg font-medium transition border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center justify-center gap-2"
+                  >
+                    <Eye className="w-4 h-4" />
+                    Ver Detalhes
+                  </button>
+                  <button
+                    onClick={() => setSelectedCar(car)}
+                    disabled={!car.isAvailable}
+                    className={`flex-1 py-3 rounded-lg font-medium transition
+                        ${car.isAvailable
+                        ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                        : 'bg-slate-200 text-slate-500 cursor-not-allowed'}`}
+                  >
+                    {car.isAvailable ? 'Alugar Agora' : 'Indisponível'}
+                  </button>
+                </div>
               </div>
             </div>
           );
@@ -495,6 +505,131 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars, curr
               {copiedLink ? <Check className="w-5 h-5 text-green-600" /> : <Copy className="w-5 h-5" />}
               {copiedLink ? 'Link Copiado!' : 'Copiar Link'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Car Details Modal */}
+      {detailsCar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in p-4" onClick={() => setDetailsCar(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+            {/* Header Image */}
+            <div className="relative h-64 overflow-hidden">
+              <img src={detailsCar.imageUrl} alt={detailsCar.model} className="w-full h-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+
+              {/* Close Button */}
+              <button
+                onClick={() => setDetailsCar(null)}
+                className="absolute top-4 right-4 p-2 bg-white/90 backdrop-blur-sm rounded-full hover:bg-white transition"
+              >
+                <X className="w-5 h-5 text-slate-700" />
+              </button>
+
+              {/* Title Overlay */}
+              <div className="absolute bottom-4 left-4 right-4 text-white">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="bg-indigo-600 px-2 py-0.5 rounded text-xs font-bold">{detailsCar.category}</span>
+                  <span className="bg-white/20 backdrop-blur px-2 py-0.5 rounded text-xs">{detailsCar.year}</span>
+                </div>
+                <h2 className="text-2xl font-bold">{detailsCar.make} {detailsCar.model}</h2>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-16rem)]">
+              {/* Pricing Cards */}
+              <div className="grid grid-cols-3 gap-3 mb-6">
+                <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl p-4 text-center border border-indigo-200">
+                  <p className="text-xs text-indigo-600 font-medium mb-1">Por Dia</p>
+                  <p className="text-2xl font-bold text-indigo-700">R$ {detailsCar.pricePerDay}</p>
+                </div>
+                <div className="bg-gradient-to-br from-violet-50 to-violet-100 rounded-xl p-4 text-center border border-violet-200">
+                  <p className="text-xs text-violet-600 font-medium mb-1">Por Semana</p>
+                  <p className="text-2xl font-bold text-violet-700">R$ {detailsCar.pricePerWeek || (detailsCar.pricePerDay * 6).toFixed(0)}</p>
+                </div>
+                <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 text-center border border-purple-200">
+                  <p className="text-xs text-purple-600 font-medium mb-1">Por Mês</p>
+                  <p className="text-2xl font-bold text-purple-700">R$ {detailsCar.pricePerMonth || (detailsCar.pricePerDay * 25).toFixed(0)}</p>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+                  <Info className="w-4 h-4 text-indigo-500" />
+                  Descrição
+                </h3>
+                <p className="text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-200">
+                  {detailsCar.description || 'Nenhuma descrição disponível.'}
+                </p>
+              </div>
+
+              {/* Features */}
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-indigo-500" />
+                  Características e Opcionais
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {detailsCar.features && detailsCar.features.length > 0 ? (
+                    detailsCar.features.map((feature, index) => (
+                      <div key={index} className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
+                        <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
+                        <span className="text-sm text-slate-700">{feature}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-slate-500 text-sm col-span-2">Nenhuma característica cadastrada.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Quick Info */}
+              <div className="flex flex-wrap gap-4 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <Calendar className="w-4 h-4 text-indigo-500" />
+                  <span>Ano: <strong>{detailsCar.year}</strong></span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <CarIcon className="w-4 h-4 text-indigo-500" />
+                  <span>Categoria: <strong>{detailsCar.category}</strong></span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <div className={`w-3 h-3 rounded-full ${detailsCar.isAvailable ? 'bg-green-500' : 'bg-red-500'}`} />
+                  <span className={detailsCar.isAvailable ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
+                    {detailsCar.isAvailable ? 'Disponível' : 'Indisponível'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Rating */}
+              {detailsCar.averageRating && (
+                <div className="flex items-center gap-2 mb-6 p-3 bg-yellow-50 rounded-xl border border-yellow-200">
+                  <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
+                  <span className="font-bold text-yellow-700">{detailsCar.averageRating.toFixed(1)}</span>
+                  <span className="text-sm text-yellow-600">Avaliação média dos locatários</span>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { toggleFavorite(detailsCar.id); }}
+                  className={`flex-1 py-3 rounded-xl font-medium transition flex items-center justify-center gap-2 border ${favorites.includes(String(detailsCar.id)) ? 'bg-pink-50 border-pink-300 text-pink-600' : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+                >
+                  <Heart className={`w-5 h-5 ${favorites.includes(String(detailsCar.id)) ? 'fill-pink-500 text-pink-500' : ''}`} />
+                  {favorites.includes(String(detailsCar.id)) ? 'Favoritado' : 'Favoritar'}
+                </button>
+                <button
+                  onClick={() => { setDetailsCar(null); setSelectedCar(detailsCar); }}
+                  disabled={!detailsCar.isAvailable}
+                  className={`flex-1 py-3 rounded-xl font-bold transition flex items-center justify-center gap-2 ${detailsCar.isAvailable ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-slate-200 text-slate-500 cursor-not-allowed'}`}
+                >
+                  {detailsCar.isAvailable ? 'Alugar Este Carro' : 'Indisponível'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

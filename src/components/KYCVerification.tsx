@@ -69,9 +69,23 @@ export const KYCVerification: React.FC<KYCVerificationProps> = ({ user, onVerifi
                 isVerified: true
             });
 
-        } catch (err) {
+        } catch (err: any) {
             console.error('Verification error:', err);
-            setError('Erro ao enviar documentos. Tente novamente.');
+
+            // Mensagens de erro mais específicas
+            let errorMessage = 'Erro ao enviar documentos. Tente novamente.';
+
+            if (err?.message?.includes('Bucket not found') || err?.message?.includes('bucket')) {
+                errorMessage = 'Erro de configuração: Bucket de storage não encontrado. Execute o script SETUP_STORAGE_KYC.sql no Supabase.';
+            } else if (err?.message?.includes('row-level security') || err?.message?.includes('policy')) {
+                errorMessage = 'Erro de permissão: Políticas de acesso não configuradas. Execute o script SETUP_STORAGE_KYC.sql no Supabase.';
+            } else if (err?.message?.includes('column') || err?.message?.includes('cnh_url') || err?.message?.includes('selfie_url')) {
+                errorMessage = 'Erro no banco: Colunas de verificação não existem. Execute o script SETUP_STORAGE_KYC.sql no Supabase.';
+            } else if (err?.message) {
+                errorMessage = `Erro: ${err.message}`;
+            }
+
+            setError(errorMessage);
         } finally {
             setUploading(false);
         }

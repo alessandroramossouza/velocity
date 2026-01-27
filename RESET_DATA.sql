@@ -1,8 +1,39 @@
+-- =====================================================
+-- VeloCity: LIMPAR TODOS OS DADOS (EXCETO USUÁRIOS)
+-- Execute no SQL Editor do Supabase
+-- =====================================================
 
--- Este comando apaga TODOS os carros do banco de dados.
--- Ele NÂO apaga os usuários (locador/locatário), então o login continua funcionando.
+-- IMPORTANTE: Este script NÃO apaga a tabela USERS
+-- Seus usuários cadastrados serão mantidos!
 
-DELETE FROM public.cars;
+-- =====================================================
+-- APAGAR DADOS DAS TABELAS (ordem importante por FK)
+-- =====================================================
 
--- Se quiser conferir se apagou mesmo, rode:
--- SELECT * FROM public.cars;
+-- 1. Pagamentos e Cartões
+DELETE FROM saved_cards;
+DELETE FROM payments;
+
+-- 2. Serviços e Parceiros
+DELETE FROM service_requests;
+DELETE FROM partners;
+
+-- 3. Avaliações e Favoritos
+DELETE FROM reviews;
+DELETE FROM favorites;
+
+-- 4. Aluguéis
+DELETE FROM rentals;
+
+-- 5. Carros
+DELETE FROM cars;
+
+-- =====================================================
+-- RESET DE SEQUENCES (IDs voltam a começar do 1)
+-- =====================================================
+ALTER SEQUENCE IF EXISTS cars_id_seq RESTART WITH 1;
+
+-- =====================================================
+-- VERIFICAÇÃO - Confirma que usuários foram mantidos
+-- =====================================================
+SELECT 'Usuários mantidos:' as status, COUNT(*) as total FROM users;
