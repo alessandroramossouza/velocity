@@ -163,10 +163,13 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, showTo
         setSaving(false);
     };
 
-    const handleRequestAction = async (requestId: string, action: 'accepted' | 'rejected') => {
+    const handleRequestAction = async (requestId: string, action: 'accepted' | 'rejected' | 'completed') => {
         const success = await updateServiceRequestStatus(requestId, action);
         if (success) {
-            showToast(`Solicitação ${action === 'accepted' ? 'aceita' : 'recusada'}!`, 'success');
+            const message = action === 'accepted' ? 'Solicitação aceita!' :
+                action === 'rejected' ? 'Solicitação recusada!' :
+                    'Serviço concluído com sucesso!';
+            showToast(message, 'success');
             loadRequests();
         } else {
             showToast('Erro ao processar ação.', 'error');
@@ -348,33 +351,69 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, showTo
 
             {/* OVERVIEW TAB */}
             {activeTab === 'overview' && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-slate-500">Solicitações Pendentes</p>
-                                <p className="text-3xl font-bold text-orange-600">{pendingCount}</p>
+                <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-slate-500">Solicitações Pendentes</p>
+                                    <p className="text-3xl font-bold text-orange-600">{pendingCount}</p>
+                                </div>
+                                <div className="p-3 bg-orange-100 rounded-full"><Clock className="w-6 h-6 text-orange-600" /></div>
                             </div>
-                            <div className="p-3 bg-orange-100 rounded-full"><Clock className="w-6 h-6 text-orange-600" /></div>
+                        </div>
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-slate-500">Serviços Realizados</p>
+                                    <p className="text-3xl font-bold text-green-600">{acceptedCount}</p>
+                                </div>
+                                <div className="p-3 bg-green-100 rounded-full"><CheckCircle className="w-6 h-6 text-green-600" /></div>
+                            </div>
+                        </div>
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-slate-500">Avaliação Média</p>
+                                    <p className="text-3xl font-bold text-yellow-600">{partner.rating?.toFixed(1) || '5.0'}</p>
+                                </div>
+                                <div className="p-3 bg-yellow-100 rounded-full"><Star className="w-6 h-6 text-yellow-600" /></div>
+                            </div>
                         </div>
                     </div>
+
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-slate-500">Serviços Realizados</p>
-                                <p className="text-3xl font-bold text-green-600">{acceptedCount}</p>
+                        <h3 className="text-lg font-bold text-slate-800 mb-4">Solicitações Recentes</h3>
+                        {requests.length === 0 ? (
+                            <p className="text-slate-500 text-sm italic">Nenhuma solicitação no momento.</p>
+                        ) : (
+                            <div className="space-y-3">
+                                {requests.slice(0, 3).map(req => (
+                                    <div key={req.id} className="flex justify-between items-center p-3 hover:bg-slate-50 rounded-lg border border-transparent hover:border-slate-100 transition cursor-pointer" onClick={() => setActiveTab('requests')}>
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-bold">
+                                                {req.owner?.name?.charAt(0) || '?'}
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-bold text-slate-900">{req.owner?.name || 'Locador'}</p>
+                                                <p className="text-xs text-slate-500">{req.serviceType} • {new Date(req.createdAt).toLocaleDateString()}</p>
+                                            </div>
+                                        </div>
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${req.status === 'pending' ? 'bg-orange-100 text-orange-700' :
+                                            req.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                                                req.status === 'completed' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
+                                            }`}>
+                                            {req.status === 'pending' ? 'Pendente' : req.status === 'accepted' ? 'Em Aberto' : req.status === 'completed' ? 'Finalizado' : req.status}
+                                        </span>
+                                    </div>
+                                ))}
+                                {requests.length > 3 && (
+                                    <button onClick={() => setActiveTab('requests')} className="w-full text-center text-sm text-indigo-600 font-semibold mt-2 hover:underline">
+                                        Ver todas as solicitações
+                                    </button>
+                                )}
                             </div>
-                            <div className="p-3 bg-green-100 rounded-full"><CheckCircle className="w-6 h-6 text-green-600" /></div>
-                        </div>
-                    </div>
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-slate-500">Avaliação Média</p>
-                                <p className="text-3xl font-bold text-yellow-600">{partner.rating?.toFixed(1) || '5.0'}</p>
-                            </div>
-                            <div className="p-3 bg-yellow-100 rounded-full"><Star className="w-6 h-6 text-yellow-600" /></div>
-                        </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -409,19 +448,27 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, showTo
                                     <div className="flex items-center gap-2">
                                         {req.status === 'pending' ? (
                                             <>
-                                                <button onClick={() => handleRequestAction(req.id, 'accepted')} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition flex items-center gap-2">
+                                                <button onClick={() => handleRequestAction(req.id, 'accepted')} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition flex items-center gap-2 text-sm font-bold">
                                                     <CheckCircle className="w-4 h-4" /> Aceitar
                                                 </button>
-                                                <button onClick={() => handleRequestAction(req.id, 'rejected')} className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition flex items-center gap-2">
+                                                <button onClick={() => handleRequestAction(req.id, 'rejected')} className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition flex items-center gap-2 text-sm font-bold">
                                                     <XCircle className="w-4 h-4" /> Recusar
                                                 </button>
                                             </>
+                                        ) : req.status === 'accepted' ? (
+                                            <>
+                                                <button onClick={() => handleRequestAction(req.id, 'completed')} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition flex items-center gap-2 text-sm font-bold">
+                                                    <CheckCircle className="w-4 h-4" /> Concluir Serviço
+                                                </button>
+                                                <a href={`mailto:${req.owner?.email}`} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition" title="Enviar E-mail">
+                                                    <Mail className="w-5 h-5" />
+                                                </a>
+                                            </>
                                         ) : (
-                                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${req.status === 'accepted' ? 'bg-green-100 text-green-700' :
-                                                req.status === 'completed' ? 'bg-blue-100 text-blue-700' :
-                                                    req.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
+                                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${req.status === 'completed' ? 'bg-blue-100 text-blue-700' :
+                                                req.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
                                                 }`}>
-                                                {req.status === 'accepted' ? 'Aceito' : req.status === 'completed' ? 'Concluído' : req.status === 'rejected' ? 'Recusado' : req.status}
+                                                {req.status === 'completed' ? 'Concluído' : req.status === 'rejected' ? 'Recusado' : req.status}
                                             </span>
                                         )}
                                     </div>

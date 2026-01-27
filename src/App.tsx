@@ -268,7 +268,7 @@ function AppContent() {
       {/* Footer */}
       < footer className="bg-slate-900 text-slate-400 py-8 mt-auto" >
         <div className="max-w-7xl mx-auto px-4 text-center">
-          <p className="text-white font-semibold">VeloCity v3.0</p>
+          <p className="text-white font-semibold">VeloCity v3.4 (PARTNER PORTAL)</p>
           <p className="text-sm mt-1">Aluguel inteligente de veículos</p>
         </div>
       </footer >
