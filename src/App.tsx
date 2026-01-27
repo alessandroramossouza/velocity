@@ -8,15 +8,16 @@ import { RenterMarketplace } from './components/RenterMarketplace';
 import { RenterHistory } from './components/RenterHistory';
 import { HelpCenter } from './components/HelpCenter';
 import { NotificationBell } from './components/NotificationBell';
+import { PaymentHistory } from './components/PaymentHistory';
 import { Login } from './components/Login';
 import { KYCVerification } from './components/KYCVerification';
 import { ToastProvider, useToast, ToastStyles } from './components/Toast';
-import { CarFront, UserCircle, LogOut, Shield, CheckCircle, ChevronDown, HelpCircle } from 'lucide-react';
+import { CarFront, UserCircle, LogOut, Shield, CheckCircle, ChevronDown, HelpCircle, CreditCard } from 'lucide-react';
 
 function AppContent() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [allCars, setAllCars] = useState<Car[]>([]);
-  const [renterView, setRenterView] = useState<'marketplace' | 'history' | 'help'>('marketplace');
+  const [renterView, setRenterView] = useState<'marketplace' | 'history' | 'help' | 'payments'>('marketplace');
   const [showKYC, setShowKYC] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([
@@ -148,7 +149,7 @@ function AppContent() {
                 VeloCity
               </span>
               <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium ml-2">
-                v3.5
+                v4.0
               </span>
             </div>
 
@@ -166,6 +167,13 @@ function AppContent() {
                     className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${renterView === 'history' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
                   >
                     Meus Aluguéis
+                  </button>
+                  <button
+                    onClick={() => setRenterView('payments')}
+                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition flex items-center gap-1.5 ${renterView === 'payments' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    Pagamentos
                   </button>
                   <button
                     onClick={() => setRenterView('help')}
@@ -255,7 +263,9 @@ function AppContent() {
         < div className="mb-8" >
           <h1 className="text-3xl font-bold text-slate-900">
             {currentUser.role === 'renter'
-              ? (renterView === 'marketplace' ? 'Encontre seu próximo carro' : 'Histórico de Viagens')
+              ? (renterView === 'marketplace' ? 'Encontre seu próximo carro' :
+                renterView === 'history' ? 'Histórico de Viagens' :
+                  renterView === 'payments' ? 'Meus Pagamentos' : 'Central de Ajuda')
               : currentUser.role === 'partner'
                 ? 'Portal do Parceiro'
                 : 'Painel do Locador'}
@@ -264,7 +274,11 @@ function AppContent() {
             {currentUser.role === 'renter'
               ? (renterView === 'marketplace'
                 ? 'Explore nossa frota premium e reserve em segundos.'
-                : 'Acompanhe seus aluguéis ativos e consulte o histórico.')
+                : renterView === 'history'
+                  ? 'Acompanhe seus aluguéis ativos e consulte o histórico.'
+                  : renterView === 'payments'
+                    ? 'Acompanhe todas as suas transações e pagamentos.'
+                    : 'Encontre respostas para suas dúvidas.')
               : currentUser.role === 'partner'
                 ? 'Gerencie suas solicitações de serviço e perfil de parceiro.'
                 : 'Gerencie seus veículos, acompanhe aluguéis ativos e fature mais.'}
@@ -281,6 +295,8 @@ function AppContent() {
               />
             ) : renterView === 'history' ? (
               <RenterHistory currentUser={currentUser} showToast={showToast} />
+            ) : renterView === 'payments' ? (
+              <PaymentHistory userId={currentUser.id} />
             ) : (
               <HelpCenter />
             )
@@ -305,7 +321,7 @@ function AppContent() {
       {/* Footer */}
       < footer className="bg-slate-900 text-slate-400 py-8 mt-auto" >
         <div className="max-w-7xl mx-auto px-4 text-center">
-          <p className="text-white font-semibold">VeloCity v3.5 (ENHANCED UX)</p>
+          <p className="text-white font-semibold">VeloCity v4.0 (PAYMENTS)</p>
           <p className="text-sm mt-1">Aluguel inteligente de veículos</p>
         </div>
       </footer >

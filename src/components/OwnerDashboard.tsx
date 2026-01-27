@@ -5,9 +5,11 @@ import { getActiveRentals, completeRental, getOwnerRentalHistory, getPartners, c
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import {
   Sparkles, Plus, Car as CarIcon, DollarSign, Loader2, Upload, Pencil, RotateCcw,
-  Calendar, AlertCircle, LayoutGrid, History, ChevronRight, User as UserIcon, CheckCircle, XCircle, Wrench, Shield
+  Calendar, AlertCircle, LayoutGrid, History, ChevronRight, User as UserIcon, CheckCircle, XCircle, Wrench, Shield, CreditCard
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { PaymentModal } from './PaymentModal';
+import { Payment } from '../services/payments';
 
 interface OwnerDashboardProps {
   user: User;
@@ -32,6 +34,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
   const [showRequestModal, setShowRequestModal] = useState<Partner | null>(null);
   const [requestNotes, setRequestNotes] = useState('');
   const [sendingRequest, setSendingRequest] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState<{ serviceRequest: ServiceRequest, partner: Partner } | null>(null);
 
   // Date Filters
   const [filterStartDate, setFilterStartDate] = useState('');
@@ -722,24 +725,63 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
               <div className="space-y-3">
                 {myServiceRequests.slice(0, 5).map(req => {
                   const partner = partners.find(p => p.id === req.partnerId);
+                  const estimatedPrice = req.serviceType === 'maintenance' ? 350 :
+                    req.serviceType === 'insurance_quote' ? 250 :
+                      req.serviceType === 'emergency' ? 500 : 200;
                   return (
-                    <div key={req.id} className="bg-white p-3 rounded-lg flex justify-between items-center border border-slate-100">
-                      <div>
-                        <p className="font-medium text-slate-800">{partner?.name || 'Parceiro'}</p>
-                        <p className="text-xs text-slate-500">{req.serviceType} • {new Date(req.createdAt).toLocaleDateString()}</p>
+                    <div key={req.id} className="bg-white p-4 rounded-lg border border-slate-100">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="font-medium text-slate-800">{partner?.name || 'Parceiro'}</p>
+                          <p className="text-xs text-slate-500">{req.serviceType} • {new Date(req.createdAt).toLocaleDateString()}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {req.status === 'accepted' && (
+                            <button
+                              onClick={() => partner && setShowPaymentModal({ serviceRequest: req, partner })}
+                              className="px-3 py-1.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg text-sm font-medium hover:opacity-90 transition flex items-center gap-1.5"
+                            >
+                              <CreditCard className="w-4 h-4" />
+                              Pagar R$ {estimatedPrice.toFixed(2)}
+                            </button>
+                          )}
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${req.status === 'pending' ? 'bg-orange-100 text-orange-700' :
+                            req.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                              req.status === 'completed' ? 'bg-blue-100 text-blue-700' :
+                                'bg-red-100 text-red-700'
+                            }`}>
+                            {req.status === 'pending' ? 'Pendente' : req.status === 'accepted' ? 'Aceito' : req.status === 'completed' ? 'Concluído' : 'Recusado'}
+                          </span>
+                        </div>
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${req.status === 'pending' ? 'bg-orange-100 text-orange-700' :
-                          req.status === 'accepted' ? 'bg-green-100 text-green-700' :
-                            req.status === 'completed' ? 'bg-blue-100 text-blue-700' :
-                              'bg-red-100 text-red-700'
-                        }`}>
-                        {req.status === 'pending' ? 'Pendente' : req.status === 'accepted' ? 'Aceito' : req.status === 'completed' ? 'Concluído' : 'Recusado'}
-                      </span>
+                      {req.notes && (
+                        <p className="text-sm text-slate-500 mt-2 bg-slate-50 p-2 rounded">{req.notes}</p>
+                      )}
                     </div>
                   );
                 })}
               </div>
             </div>
+          )}
+
+          {/* Payment Modal for Services */}
+          {showPaymentModal && (
+            <PaymentModal
+              isOpen={!!showPaymentModal}
+              onClose={() => setShowPaymentModal(null)}
+              onSuccess={(payment: Payment) => {
+                showToast(`Pagamento realizado com sucesso para ${showPaymentModal.partner.name}!`, 'success');
+                setShowPaymentModal(null);
+                loadPartners(); // Reload to update status
+              }}
+              userId={user.id}
+              amount={showPaymentModal.serviceRequest.serviceType === 'maintenance' ? 350 :
+                showPaymentModal.serviceRequest.serviceType === 'insurance_quote' ? 250 :
+                  showPaymentModal.serviceRequest.serviceType === 'emergency' ? 500 : 200}
+              description={`Serviço: ${showPaymentModal.serviceRequest.serviceType} - ${showPaymentModal.partner.name}`}
+              receiverId={showPaymentModal.partner.userId}
+              serviceRequestId={showPaymentModal.serviceRequest.id}
+            />
           )}
 
           {loadingPartners ? (
