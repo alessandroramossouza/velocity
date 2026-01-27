@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User, Partner, ServiceRequest } from '../types';
 import {
     getPartnerByUserId,
@@ -6,9 +6,10 @@ import {
     getPartnerServiceRequests,
     updateServiceRequestStatus
 } from '../services/api';
+import { supabase } from '../lib/supabase';
 import {
     LayoutGrid, FileText, Settings, Loader2, CheckCircle, XCircle, Clock,
-    User as UserIcon, Phone, Mail, MapPin, Globe, Wrench, Shield, Star
+    User as UserIcon, Phone, Mail, MapPin, Globe, Wrench, Shield, Star, Upload, Image as ImageIcon
 } from 'lucide-react';
 
 interface PartnerDashboardProps {
@@ -23,6 +24,11 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, showTo
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
+    // Image upload state
+    const [imagePreview, setImagePreview] = useState<string>('');
+    const [uploadingImage, setUploadingImage] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
     // Profile form state
     const [formName, setFormName] = useState('');
     const [formType, setFormType] = useState<'mechanic' | 'insurance'>('mechanic');
@@ -32,6 +38,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, showTo
     const [formServiceArea, setFormServiceArea] = useState('');
     const [formWebsite, setFormWebsite] = useState('');
     const [formBenefits, setFormBenefits] = useState<string[]>([]);
+    const [formImageUrl, setFormImageUrl] = useState('');
 
     useEffect(() => {
         loadPartnerData();
@@ -57,6 +64,8 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, showTo
             setFormServiceArea(data.serviceArea || '');
             setFormWebsite(data.website || '');
             setFormBenefits(data.benefits || []);
+            setFormImageUrl(data.imageUrl || '');
+            setImagePreview(data.imageUrl || '');
         }
         setLoading(false);
     };
@@ -65,6 +74,66 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, showTo
         if (!partner) return;
         const data = await getPartnerServiceRequests(partner.id);
         setRequests(data);
+    };
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            showToast('Por favor, selecione uma imagem válida.', 'error');
+            return;
+        }
+
+        // Validate file size (max 2MB)
+        if (file.size > 2 * 1024 * 1024) {
+            showToast('A imagem deve ter no máximo 2MB.', 'error');
+            return;
+        }
+
+        setUploadingImage(true);
+
+        try {
+            // Create a unique filename
+            const fileExt = file.name.split('.').pop();
+            const fileName = `partner_${user.id}_${Date.now()}.${fileExt}`;
+            const filePath = `partners/${fileName}`;
+
+            // Upload to Supabase Storage
+            const { data, error } = await supabase.storage
+                .from('partner-images')
+                .upload(filePath, file, { upsert: true });
+
+            if (error) {
+                // If bucket doesn't exist or upload fails, use local preview URL
+                console.error('Upload error:', error);
+                // Fallback: create a local preview
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const base64 = reader.result as string;
+                    setImagePreview(base64);
+                    setFormImageUrl(base64);
+                    showToast('Imagem carregada localmente (preview).', 'info');
+                };
+                reader.readAsDataURL(file);
+            } else {
+                // Get public URL
+                const { data: urlData } = supabase.storage
+                    .from('partner-images')
+                    .getPublicUrl(filePath);
+
+                const publicUrl = urlData.publicUrl;
+                setImagePreview(publicUrl);
+                setFormImageUrl(publicUrl);
+                showToast('Imagem enviada com sucesso!', 'success');
+            }
+        } catch (err) {
+            console.error('Error uploading image:', err);
+            showToast('Erro ao enviar imagem. Tente novamente.', 'error');
+        } finally {
+            setUploadingImage(false);
+        }
     };
 
     const handleSaveProfile = async (e: React.FormEvent) => {
@@ -81,7 +150,8 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, showTo
             serviceArea: formServiceArea,
             website: formWebsite,
             benefits: formBenefits,
-            status: 'active'
+            status: 'active',
+            imageUrl: formImageUrl
         });
 
         if (updatedPartner) {
@@ -118,6 +188,52 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, showTo
         </button>
     );
 
+    // Image Upload Component
+    const ImageUploadField = () => (
+        <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Logo / Foto da Empresa</label>
+            <div className="flex items-start gap-4">
+                <div
+                    className="w-32 h-32 border-2 border-dashed border-slate-300 rounded-xl flex items-center justify-center overflow-hidden bg-slate-50 hover:border-green-500 transition cursor-pointer"
+                    onClick={() => fileInputRef.current?.click()}
+                >
+                    {uploadingImage ? (
+                        <Loader2 className="w-8 h-8 animate-spin text-green-600" />
+                    ) : imagePreview ? (
+                        <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                    ) : (
+                        <div className="text-center p-2">
+                            <ImageIcon className="w-8 h-8 text-slate-400 mx-auto mb-1" />
+                            <span className="text-xs text-slate-500">Clique para enviar</span>
+                        </div>
+                    )}
+                </div>
+                <div className="flex-1">
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                    />
+                    <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadingImage}
+                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition flex items-center gap-2 text-sm font-medium"
+                    >
+                        <Upload className="w-4 h-4" />
+                        {uploadingImage ? 'Enviando...' : 'Escolher Imagem'}
+                    </button>
+                    <p className="text-xs text-slate-500 mt-2">PNG, JPG ou WEBP. Máx. 2MB.</p>
+                    {formImageUrl && !formImageUrl.startsWith('data:') && (
+                        <p className="text-xs text-green-600 mt-1">✓ Imagem salva</p>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
@@ -139,6 +255,9 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, showTo
                 </div>
 
                 <form onSubmit={handleSaveProfile} className="space-y-6">
+                    {/* Image Upload */}
+                    <ImageUploadField />
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1">Nome da Empresa</label>
@@ -198,8 +317,14 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, showTo
             {/* Header */}
             <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white p-6 rounded-xl">
                 <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
-                        {partner.type === 'mechanic' ? <Wrench className="w-8 h-8" /> : <Shield className="w-8 h-8" />}
+                    <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center overflow-hidden">
+                        {partner.imageUrl ? (
+                            <img src={partner.imageUrl} alt={partner.name} className="w-full h-full object-cover" />
+                        ) : partner.type === 'mechanic' ? (
+                            <Wrench className="w-8 h-8" />
+                        ) : (
+                            <Shield className="w-8 h-8" />
+                        )}
                     </div>
                     <div>
                         <h1 className="text-2xl font-bold">{partner.name}</h1>
@@ -293,8 +418,8 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, showTo
                                             </>
                                         ) : (
                                             <span className={`px-3 py-1 rounded-full text-xs font-bold ${req.status === 'accepted' ? 'bg-green-100 text-green-700' :
-                                                    req.status === 'completed' ? 'bg-blue-100 text-blue-700' :
-                                                        req.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
+                                                req.status === 'completed' ? 'bg-blue-100 text-blue-700' :
+                                                    req.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
                                                 }`}>
                                                 {req.status === 'accepted' ? 'Aceito' : req.status === 'completed' ? 'Concluído' : req.status === 'rejected' ? 'Recusado' : req.status}
                                             </span>
@@ -312,6 +437,9 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, showTo
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                     <h3 className="text-xl font-bold text-slate-800 mb-6">Editar Perfil</h3>
                     <form onSubmit={handleSaveProfile} className="space-y-6">
+                        {/* Image Upload */}
+                        <ImageUploadField />
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Nome da Empresa</label>
