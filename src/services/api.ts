@@ -1,6 +1,5 @@
-
 import { supabase } from '../lib/supabase';
-import { Car, User, Rental, Review, Favorite } from '../types';
+import { Car, User, Rental, Review, Favorite, Partner } from '../types';
 
 // ============================================
 // CARS
@@ -497,4 +496,30 @@ export const registerUser = async (email: string, name: string, role: 'owner' | 
 // Legacy function (kept for compatibility)
 export const rentCar = async (carId: string): Promise<void> => {
     await setCarAvailability(carId, false);
+};
+
+// ============================================
+// PARTNERS (Mechanics & Insurance)
+// ============================================
+
+export const getPartners = async (): Promise<Partner[]> => {
+    const { data, error } = await supabase
+        .from('partners')
+        .select(`
+            id,
+            name,
+            type,
+            description,
+            contactInfo:contact_info,
+            rating,
+            imageUrl:image_url,
+            benefits
+        `);
+
+    if (error) {
+        console.error('Error fetching partners:', error);
+        return [];
+    }
+
+    return data as unknown as Partner[];
 };

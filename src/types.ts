@@ -91,3 +91,14 @@ export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
 }
+
+export interface Partner {
+  id: string;
+  name: string;
+  type: 'mechanic' | 'insurance';
+  description: string;
+  contactInfo: string;
+  rating: number;
+  imageUrl: string;
+  benefits: string[];
+}
