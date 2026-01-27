@@ -1,22 +1,43 @@
 
 import React, { useState, useEffect } from 'react';
 import { getCars, createCar, updateCar, createRental, setCarAvailability } from './services/api';
-import { Car, User } from './types';
+import { Car, User, Notification } from './types';
 import { OwnerDashboard } from './components/OwnerDashboard';
 import { PartnerDashboard } from './components/PartnerDashboard';
 import { RenterMarketplace } from './components/RenterMarketplace';
 import { RenterHistory } from './components/RenterHistory';
+import { HelpCenter } from './components/HelpCenter';
+import { NotificationBell } from './components/NotificationBell';
 import { Login } from './components/Login';
 import { KYCVerification } from './components/KYCVerification';
 import { ToastProvider, useToast, ToastStyles } from './components/Toast';
-import { CarFront, UserCircle, LogOut, Shield, CheckCircle, ChevronDown } from 'lucide-react';
+import { CarFront, UserCircle, LogOut, Shield, CheckCircle, ChevronDown, HelpCircle } from 'lucide-react';
 
 function AppContent() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [allCars, setAllCars] = useState<Car[]>([]);
-  const [renterView, setRenterView] = useState<'marketplace' | 'history'>('marketplace');
+  const [renterView, setRenterView] = useState<'marketplace' | 'history' | 'help'>('marketplace');
   const [showKYC, setShowKYC] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([
+    {
+      id: '1',
+      userId: '',
+      type: 'general',
+      title: 'Bem-vindo ao VeloCity!',
+      message: 'Explore nossa plataforma e encontre o carro perfeito para você.',
+      isRead: false,
+      createdAt: new Date().toISOString()
+    }
+  ]);
+
+  const handleMarkNotificationAsRead = (notificationId: string) => {
+    setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n));
+  };
+
+  const handleMarkAllNotificationsAsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+  };
 
   const { showToast } = useToast();
 
@@ -127,7 +148,7 @@ function AppContent() {
                 VeloCity
               </span>
               <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium ml-2">
-                v3.2 (PRODUCTION)
+                v3.5
               </span>
             </div>
 
@@ -146,8 +167,22 @@ function AppContent() {
                   >
                     Meus Aluguéis
                   </button>
+                  <button
+                    onClick={() => setRenterView('help')}
+                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${renterView === 'help' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    <HelpCircle className="w-4 h-4" />
+                  </button>
                 </div>
               )}
+
+              {/* Notification Bell */}
+              <NotificationBell
+                userId={currentUser.id}
+                notifications={notifications}
+                onMarkAsRead={handleMarkNotificationAsRead}
+                onMarkAllAsRead={handleMarkAllNotificationsAsRead}
+              />
 
               {/* Profile Dropdown */}
               <div className="relative">
@@ -244,8 +279,10 @@ function AppContent() {
                 currentUser={currentUser}
                 onRentCar={handleRentCar}
               />
+            ) : renterView === 'history' ? (
+              <RenterHistory currentUser={currentUser} showToast={showToast} />
             ) : (
-              <RenterHistory currentUser={currentUser} />
+              <HelpCenter />
             )
           ) : currentUser.role === 'partner' ? (
             <PartnerDashboard
@@ -268,7 +305,7 @@ function AppContent() {
       {/* Footer */}
       < footer className="bg-slate-900 text-slate-400 py-8 mt-auto" >
         <div className="max-w-7xl mx-auto px-4 text-center">
-          <p className="text-white font-semibold">VeloCity v3.4 (PARTNER PORTAL)</p>
+          <p className="text-white font-semibold">VeloCity v3.5 (ENHANCED UX)</p>
           <p className="text-sm mt-1">Aluguel inteligente de veículos</p>
         </div>
       </footer >

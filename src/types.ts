@@ -121,3 +121,14 @@ export interface ServiceRequest {
   owner?: User;
   partner?: Partner;
 }
+
+export interface Notification {
+  id: string;
+  userId: string;
+  type: 'rental_request' | 'rental_approved' | 'rental_rejected' | 'return_reminder' | 'new_review' | 'service_request' | 'general';
+  title: string;
+  message: string;
+  isRead: boolean;
+  link?: string;
+  createdAt: string;
+}
