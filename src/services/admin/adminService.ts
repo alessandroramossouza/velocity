@@ -149,10 +149,28 @@ export const getDetailedUsers = async () => {
         email: u.email,
         role: u.role,
         kycStatus: u.is_verified ? 'verified' : 'pending',
+        cnhUrl: u.cnh_url,
+        selfieUrl: u.selfie_url,
         joinDate: u.created_at || new Date().toISOString(),
         lateReturns: 0, // Need to implement based on rental history query
         carsListed: 0   // Need to implement based on cars count query
     }));
+};
+
+export const updateUser = async (userId: string, updates: any) => {
+    const { data, error } = await supabase
+        .from('users')
+        .update(updates)
+        .eq('id', userId)
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error updating user:', error);
+        throw error;
+    }
+
+    return data;
 };
 
 // Helper for existing components

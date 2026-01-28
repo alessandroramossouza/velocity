@@ -5,9 +5,10 @@ import {
 } from 'recharts';
 import {
     Users, Car, DollarSign, Activity, TrendingUp, AlertTriangle,
-    ShieldCheck, Wrench, Search, Filter, Download, FileText, CheckCircle, XCircle, Clock, Calendar
+    ShieldCheck, Wrench, Search, Filter, Download, FileText, CheckCircle, XCircle, Clock, Calendar,
+    X, Save, ExternalLink
 } from 'lucide-react';
-import { getAdminStats, getDetailedRentals, getDetailedUsers } from '../../services/admin/adminService';
+import { getAdminStats, getDetailedRentals, getDetailedUsers, updateUser } from '../../services/admin/adminService';
 import { DashboardStats } from '../../types';
 
 const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444'];
@@ -19,6 +20,10 @@ export const AdminDashboard: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'overview' | 'rentals' | 'users'>('overview');
     const [searchTerm, setSearchTerm] = useState('');
+
+    // Edit User Modal State
+    const [editingUser, setEditingUser] = useState<any>(null);
+    const [savingUser, setSavingUser] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -38,6 +43,25 @@ export const AdminDashboard: React.FC = () => {
             console.error("Failed to load admin data", error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleSaveUser = async () => {
+        if (!editingUser) return;
+        setSavingUser(true);
+        try {
+            await updateUser(editingUser.id, {
+                name: editingUser.name,
+                role: editingUser.role,
+                is_verified: editingUser.kycStatus === 'verified'
+            });
+            await loadData();
+            setEditingUser(null);
+        } catch (error) {
+            console.error("Failed to update user", error);
+            alert("Erro ao salvar alterações.");
+        } finally {
+            setSavingUser(false);
         }
     };
 
@@ -305,7 +329,12 @@ export const AdminDashboard: React.FC = () => {
                                             {user.lateReturns === 0 && user.carsListed === undefined && <span className="text-green-600">Sem incidentes</span>}
                                         </td>
                                         <td className="px-6 py-4">
-                                            <button className="text-slate-400 hover:text-indigo-600">Editar</button>
+                                            <button
+                                                onClick={() => setEditingUser({ ...user })}
+                                                className="text-indigo-600 hover:text-indigo-800 font-medium transition flex items-center gap-1"
+                                            >
+                                                Editar
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}
@@ -315,6 +344,107 @@ export const AdminDashboard: React.FC = () => {
                 </div>
             )}
 
+            {/* Edit User Modal */}
+            {editingUser && (
+                <div key="edit-modal" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in px-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-slide-up flex flex-col max-h-[90vh]">
+                        <div className="bg-slate-50 border-b border-slate-200 p-6 flex justify-between items-center shrink-0">
+                            <h3 className="text-xl font-bold text-slate-900">Editar Usuário</h3>
+                            <button onClick={() => setEditingUser(null)} className="p-2 hover:bg-slate-200 rounded-full transition">
+                                <X className="w-5 h-5 text-slate-500" />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-4 overflow-y-auto">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Nome Completo</label>
+                                <input
+                                    type="text"
+                                    value={editingUser.name}
+                                    onChange={e => setEditingUser({ ...editingUser, name: e.target.value })}
+                                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Email (ID)</label>
+                                <input
+                                    type="text"
+                                    value={editingUser.email}
+                                    disabled
+                                    className="w-full px-4 py-2 border border-slate-200 bg-slate-50 text-slate-500 rounded-lg outline-none cursor-not-allowed"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de Usuário</label>
+                                    <select
+                                        value={editingUser.role}
+                                        onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}
+                                        className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    >
+                                        <option value="renter">Locatário</option>
+                                        <option value="owner">Locador</option>
+                                        <option value="admin">Administrador</option>
+                                        <option value="partner">Parceiro</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Status KYC</label>
+                                    <select
+                                        value={editingUser.kycStatus}
+                                        onChange={e => setEditingUser({ ...editingUser, kycStatus: e.target.value })}
+                                        className={`w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-medium ${editingUser.kycStatus === 'verified' ? 'text-green-600' : 'text-orange-600'}`}
+                                    >
+                                        <option value="pending">Pendente 🕒</option>
+                                        <option value="verified">Verificado ✅</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="pt-4 border-t border-slate-100">
+                                <p className="text-sm font-medium text-slate-700 mb-3">Documentos e Dados</p>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                                        <p className="text-xs text-slate-500 mb-1">Carteira de Habilitação</p>
+                                        {editingUser.cnhUrl ? (
+                                            <a href={editingUser.cnhUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-indigo-600 font-medium text-sm hover:underline">
+                                                <FileText className="w-4 h-4" /> Ver CNH <ExternalLink className="w-3 h-3" />
+                                            </a>
+                                        ) : <span className="text-xs text-slate-400 italic">Não enviada</span>}
+                                    </div>
+                                    <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                                        <p className="text-xs text-slate-500 mb-1">Selfie de Identificação</p>
+                                        {editingUser.selfieUrl ? (
+                                            <a href={editingUser.selfieUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-indigo-600 font-medium text-sm hover:underline">
+                                                <Users className="w-4 h-4" /> Ver Selfie <ExternalLink className="w-3 h-3" />
+                                            </a>
+                                        ) : <span className="text-xs text-slate-400 italic">Não enviada</span>}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-6 border-t border-slate-200 flex justify-end gap-3 bg-slate-50 shrink-0">
+                            <button
+                                onClick={() => setEditingUser(null)}
+                                className="px-4 py-2 text-slate-700 hover:bg-slate-200 rounded-lg font-medium transition"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleSaveUser}
+                                disabled={savingUser}
+                                className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition flex items-center gap-2 disabled:opacity-50"
+                            >
+                                {savingUser ? 'Salvando...' : <><Save className="w-4 h-4" /> Salvar Alterações</>}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
