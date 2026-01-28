@@ -130,17 +130,21 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     <button
                         type="button"
                         onClick={() => {
-                            // Demo bypass to ensure Admin Dashboard is shown immediately
-                            onLogin({
-                                id: 'admin_demo',
-                                name: 'Administrador VeloCity',
-                                email: 'admin@velocity.com',
-                                role: 'admin'
-                            });
+                            const password = window.prompt("Digite a senha de administrador:");
+                            if (password === "admin@Jesus10") {
+                                onLogin({
+                                    id: 'admin_demo',
+                                    name: 'Administrador VeloCity',
+                                    email: 'admin@velocity.com',
+                                    role: 'admin'
+                                });
+                            } else if (password) {
+                                alert("Senha incorreta!");
+                            }
                         }}
                         className="text-xs text-slate-400 hover:text-indigo-600 font-medium transition"
                     >
-                        Acesso Administrativo (Demo)
+                        Acesso Administrativo
                     </button>
                 </div>
             </div>
