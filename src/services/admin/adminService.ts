@@ -1,63 +1,162 @@
+import { supabase } from '../../lib/supabase';
 import { DashboardStats } from '../../types';
 
-// Mock data generator for the "Ultra Mega Forte" dashboard
 export const getAdminStats = async (): Promise<DashboardStats> => {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 800));
+    // 1. Fetch key counts
+    const { count: totalUsers } = await supabase.from('users').select('*', { count: 'exact', head: true });
+    const { count: totalCars } = await supabase.from('cars').select('*', { count: 'exact', head: true });
+
+    // Active rentals: status = 'active'
+    const { count: activeRentals } = await supabase.from('rentals')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'active');
+
+    // 2. Revenue Calculation (Sum of approved payments)
+    const { data: payments } = await supabase
+        .from('payments')
+        .select('amount, paid_at')
+        .eq('status', 'approved');
+
+    const totalRevenue = payments?.reduce((acc, p) => acc + (Number(p.amount) || 0), 0) || 0;
+
+    // 3. Revenue by Month
+    const revenueByMonthMap = new Map<string, number>();
+    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+    // Initialize months with 0
+    months.forEach(m => revenueByMonthMap.set(m, 0));
+
+    payments?.forEach(p => {
+        if (!p.paid_at) return;
+        const date = new Date(p.paid_at);
+        const monthIndex = date.getMonth();
+        const monthName = months[monthIndex];
+        revenueByMonthMap.set(monthName, (revenueByMonthMap.get(monthName) || 0) + Number(p.amount));
+    });
+
+    const revenueByMonth = months.map(m => ({
+        name: m,
+        value: revenueByMonthMap.get(m) || 0
+    }));
+
+    // 4. Car Status (Approximation)
+    const carStatus = [
+        { name: 'Disponível', value: (totalCars || 0) - (activeRentals || 0) },
+        { name: 'Alugado', value: activeRentals || 0 },
+        { name: 'Manutenção', value: 0 }, // Placeholder until maintenance module is real
+        { name: 'Indisponível', value: 0 },
+    ];
+
+    // 5. User Growth (Mocked for now as we don't have created_at history easily accessible without more queries)
+    // We'll return a static recent growth based on total users
+    const userGrowth = [
+        { name: 'Jan', renters: Math.floor((totalUsers || 0) * 0.8), owners: Math.floor((totalUsers || 0) * 0.2) }
+    ];
 
     return {
-        totalUsers: 1248,
-        totalCars: 156,
-        activeRentals: 42,
-        totalRevenue: 284500.00,
-        revenueByMonth: [
-            { name: 'Jan', value: 18400 },
-            { name: 'Fev', value: 22300 },
-            { name: 'Mar', value: 24500 },
-            { name: 'Abr', value: 21200 },
-            { name: 'Mai', value: 28900 },
-            { name: 'Jun', value: 32400 },
-            { name: 'Jul', value: 38500 },
-            { name: 'Ago', value: 42100 },
-            { name: 'Set', value: 45000 },
-        ],
-        userGrowth: [
-            { name: 'Jan', renters: 120, owners: 15 },
-            { name: 'Fev', renters: 150, owners: 22 },
-            { name: 'Mar', renters: 220, owners: 35 },
-            { name: 'Abr', renters: 310, owners: 48 },
-            { name: 'Mai', renters: 450, owners: 62 },
-            { name: 'Jun', renters: 580, owners: 85 },
-        ],
-        carStatus: [
-            { name: 'Disponível', value: 85 },
-            { name: 'Alugado', value: 42 },
-            { name: 'Manutenção', value: 12 },
-            { name: 'Indisponível', value: 17 },
-        ]
+        totalUsers: totalUsers || 0,
+        totalCars: totalCars || 0,
+        activeRentals: activeRentals || 0,
+        totalRevenue,
+        revenueByMonth,
+        userGrowth,
+        carStatus
     };
 };
 
-// Dados detalhados para tabelas de gestão
-export const getDetailedRentals = () => {
-    return [
-        { id: 'R101', car: 'Jeep Renegade', renter: 'Carlos Silva', owner: 'Maria Souza', startDate: '2024-03-01', endDate: '2024-03-10', status: 'active', paymentStatus: 'late', contractSigned: true, daysLate: 2, amount: 2500.00 },
-        { id: 'R102', car: 'Toyota Corolla', renter: 'Ana Santos', owner: 'João Pedro', startDate: '2024-03-05', endDate: '2024-03-12', status: 'active', paymentStatus: 'paid', contractSigned: true, daysLate: 0, amount: 1800.00 },
-        { id: 'R103', car: 'BMW 320i', renter: 'Roberto Lima', owner: 'Global Motors', startDate: '2024-03-08', endDate: '2024-03-15', status: 'pending', paymentStatus: 'pending', contractSigned: false, daysLate: 0, amount: 4200.00 },
-        { id: 'R104', car: 'Hyundai HB20', renter: 'Fernanda Costa', owner: 'Maria Souza', startDate: '2024-02-28', endDate: '2024-03-05', status: 'completed', paymentStatus: 'paid', contractSigned: true, daysLate: 0, amount: 900.00 },
-        { id: 'R105', car: 'Fiat Pulse', renter: 'Lucas Pereira', owner: 'João Pedro', startDate: '2024-03-02', endDate: '2024-03-05', status: 'late_return', paymentStatus: 'paid', contractSigned: true, daysLate: 5, amount: 1200.00 },
-    ];
+export const getDetailedRentals = async () => {
+    // Fetch Rentals
+    const { data: rentals } = await supabase
+        .from('rentals')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (!rentals) return [];
+
+    // Fetch related data
+    const userIds = new Set<string>();
+    const carIds = new Set<string>();
+    const rentalIds = rentals.map(r => r.id);
+
+    rentals.forEach(r => {
+        if (r.renter_id) userIds.add(r.renter_id);
+        if (r.owner_id) userIds.add(r.owner_id);
+        if (r.car_id) carIds.add(r.car_id);
+    });
+
+    const { data: users } = await supabase.from('users').select('id, name, email').in('id', Array.from(userIds));
+    const { data: cars } = await supabase.from('cars').select('id, make, model').in('id', Array.from(carIds));
+    const { data: payments } = await supabase.from('payments').select('rental_id, status, amount').in('rental_id', rentalIds);
+
+    // Create Maps for fast lookup
+    const usersMap = new Map(users?.map(u => [u.id, u]));
+    const carsMap = new Map(cars?.map(c => [c.id, c]));
+    const paymentsMap = new Map();
+
+    // Group payments by rental (taking the latest or most relevant status)
+    payments?.forEach(p => {
+        // If we have an approved payment, that wins. Else take whatever.
+        const current = paymentsMap.get(p.rental_id);
+        if (current !== 'paid') {
+            if (p.status === 'approved') paymentsMap.set(p.rental_id, 'paid');
+            else if (p.status === 'pending') paymentsMap.set(p.rental_id, 'pending');
+            else if (!current) paymentsMap.set(p.rental_id, 'late'); // Default/Fallback
+        }
+    });
+
+    return rentals.map(r => {
+        const renter = usersMap.get(r.renter_id);
+        const owner = usersMap.get(r.owner_id);
+        const car = carsMap.get(r.car_id);
+
+        const endDate = new Date(r.end_date);
+        const today = new Date();
+        const isLate = r.status === 'active' && today > endDate;
+        const daysLate = isLate ? Math.ceil((today.getTime() - endDate.getTime()) / (1000 * 3600 * 24)) : 0;
+
+        // Payment status logic
+        let paymentStatus = paymentsMap.get(r.id) || 'pending';
+        // If rental is completed, assume paid for old data, or trust payments table
+        if (r.status === 'completed' && paymentStatus === 'pending') paymentStatus = 'paid';
+
+        return {
+            id: r.id,
+            car: car ? `${car.make} ${car.model}` : 'Veículo Removido',
+            renter: renter ? renter.name : 'Usuário Desconhecido',
+            owner: owner ? owner.name : 'Desconhecido',
+            startDate: r.start_date,
+            endDate: r.end_date,
+            status: r.status,
+            paymentStatus: paymentStatus,
+            contractSigned: !!r.terms_accepted, // Assuming this column exists from previous step
+            daysLate: daysLate,
+            amount: Number(r.total_price) || 0
+        };
+    });
 };
 
-export const getDetailedUsers = () => {
-    return [
-        { id: 'U001', name: 'Carlos Silva', email: 'carlos@email.com', role: 'renter', kycStatus: 'verified', joinDate: '2023-11-15', lateReturns: 2 },
-        { id: 'U002', name: 'Maria Souza', email: 'maria@email.com', role: 'owner', kycStatus: 'verified', joinDate: '2023-10-10', carsListed: 5 },
-        { id: 'U003', name: 'Roberto Lima', email: 'roberto@email.com', role: 'renter', kycStatus: 'pending', joinDate: '2024-02-20', lateReturns: 0 },
-        { id: 'U004', name: 'Mecânica Total', email: 'contato@mecanica.com', role: 'partner', kycStatus: 'verified', joinDate: '2023-12-01', type: 'mechanic' },
-    ];
+export const getDetailedUsers = async () => {
+    const { data: users } = await supabase
+        .from('users')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (!users) return [];
+
+    return users.map(u => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        kycStatus: u.is_verified ? 'verified' : 'pending',
+        joinDate: u.created_at || new Date().toISOString(),
+        lateReturns: 0, // Need to implement based on rental history query
+        carsListed: 0   // Need to implement based on cars count query
+    }));
 };
 
-export const getLateRentals = () => {
-    return getDetailedRentals().filter(r => r.daysLate > 0 || r.status === 'late_return');
+// Helper for existing components
+export const getLateRentals = async () => {
+    const rentals = await getDetailedRentals();
+    return rentals.filter(r => r.daysLate > 0 || r.status === 'late_return');
 };

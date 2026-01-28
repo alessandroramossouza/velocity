@@ -26,14 +26,19 @@ export const AdminDashboard: React.FC = () => {
 
     const loadData = async () => {
         setLoading(true);
-        const statsData = await getAdminStats();
-        const rentalsData = getDetailedRentals();
-        const usersData = getDetailedUsers();
+        try {
+            const statsData = await getAdminStats();
+            const rentalsData = await getDetailedRentals();
+            const usersData = await getDetailedUsers();
 
-        setStats(statsData);
-        setRentals(rentalsData);
-        setUsers(usersData);
-        setLoading(false);
+            setStats(statsData);
+            setRentals(rentalsData);
+            setUsers(usersData);
+        } catch (error) {
+            console.error("Failed to load admin data", error);
+        } finally {
+            setLoading(false);
+        }
     };
 
     if (loading || !stats) {
@@ -276,7 +281,7 @@ export const AdminDashboard: React.FC = () => {
                                         <td className="px-6 py-4 font-medium text-slate-900">{user.name}</td>
                                         <td className="px-6 py-4">
                                             <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${user.role === 'renter' ? 'bg-blue-100 text-blue-700' :
-                                                    user.role === 'owner' ? 'bg-purple-100 text-purple-700' : 'bg-orange-100 text-orange-700'
+                                                user.role === 'owner' ? 'bg-purple-100 text-purple-700' : 'bg-orange-100 text-orange-700'
                                                 }`}>
                                                 {user.role}
                                             </span>
