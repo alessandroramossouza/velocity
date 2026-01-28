@@ -19,7 +19,7 @@ export interface Car {
 export interface User {
   id: string;
   name: string;
-  role: 'owner' | 'renter' | 'partner';
+  role: 'owner' | 'renter' | 'partner' | 'admin';
   email: string;
   // KYC Fields
   cnhUrl?: string;
@@ -131,4 +131,14 @@ export interface Notification {
   isRead: boolean;
   link?: string;
   createdAt: string;
+}
+
+export interface DashboardStats {
+  totalUsers: number;
+  totalCars: number;
+  activeRentals: number;
+  totalRevenue: number;
+  revenueByMonth: { name: string; value: number }[];
+  userGrowth: { name: string; renters: number; owners: number }[];
+  carStatus: { name: string; value: number }[];
 }

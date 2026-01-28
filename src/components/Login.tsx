@@ -125,6 +125,24 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (mode === 'login' ? 'Entrar' : 'Cadastrar e Entrar')}
                     </button>
                 </form>
+
+                <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            // Demo bypass to ensure Admin Dashboard is shown immediately
+                            onLogin({
+                                id: 'admin_demo',
+                                name: 'Administrador VeloCity',
+                                email: 'admin@velocity.com',
+                                role: 'admin'
+                            });
+                        }}
+                        className="text-xs text-slate-400 hover:text-indigo-600 font-medium transition"
+                    >
+                        Acesso Administrativo (Demo)
+                    </button>
+                </div>
             </div>
         </div>
     );

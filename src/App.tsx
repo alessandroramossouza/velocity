@@ -12,7 +12,8 @@ import { PaymentHistory } from './components/PaymentHistory';
 import { Login } from './components/Login';
 import { KYCVerification } from './components/KYCVerification';
 import { ToastProvider, useToast, ToastStyles } from './components/Toast';
-import { CarFront, UserCircle, LogOut, Shield, CheckCircle, ChevronDown, HelpCircle, CreditCard } from 'lucide-react';
+import { CarFront, UserCircle, LogOut, Shield, CheckCircle, ChevronDown, HelpCircle, CreditCard, LayoutDashboard } from 'lucide-react';
+import { AdminDashboard } from './components/admin/AdminDashboard';
 
 function AppContent() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -207,7 +208,7 @@ function AppContent() {
                       )}
                     </div>
                     <p className="text-xs text-slate-500 capitalize">
-                      {currentUser.role === 'owner' ? 'Locador' : 'Locatário'}
+                      {currentUser.role === 'owner' ? 'Locador' : currentUser.role === 'admin' ? 'Administrador' : currentUser.role === 'partner' ? 'Parceiro' : 'Locatário'}
                     </p>
                   </div>
                   <ChevronDown className="w-4 h-4 text-slate-400" />
@@ -268,7 +269,9 @@ function AppContent() {
                   renterView === 'payments' ? 'Meus Pagamentos' : 'Central de Ajuda')
               : currentUser.role === 'partner'
                 ? 'Portal do Parceiro'
-                : 'Painel do Locador'}
+                : currentUser.role === 'admin'
+                  ? 'Visão Global'
+                  : 'Painel do Locador'}
           </h1>
           <p className="text-slate-500 mt-2">
             {currentUser.role === 'renter'
@@ -281,7 +284,9 @@ function AppContent() {
                     : 'Encontre respostas para suas dúvidas.')
               : currentUser.role === 'partner'
                 ? 'Gerencie suas solicitações de serviço e perfil de parceiro.'
-                : 'Gerencie seus veículos, acompanhe aluguéis ativos e fature mais.'}
+                : currentUser.role === 'admin'
+                  ? 'Monitoramento em tempo real e gestão estratégica.'
+                  : 'Gerencie seus veículos, acompanhe aluguéis ativos e fature mais.'}
           </p>
         </div >
 
@@ -305,6 +310,8 @@ function AppContent() {
               user={currentUser}
               showToast={showToast}
             />
+          ) : currentUser.role === 'admin' ? (
+            <AdminDashboard />
           ) : (
             <OwnerDashboard
               user={currentUser}
