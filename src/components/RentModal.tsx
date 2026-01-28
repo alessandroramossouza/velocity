@@ -1,9 +1,10 @@
 
 import React, { useState } from 'react';
 import { Car, User } from '../types';
-import { Calendar, X, CheckCircle, Tag, Shield, AlertTriangle, CreditCard } from 'lucide-react';
+import { Calendar, X, AlertTriangle, CreditCard, ShieldCheck, ArrowRight, ArrowLeft } from 'lucide-react';
 import { PaymentModal } from './PaymentModal';
 import { Payment } from '../services/payments';
+import { ContractViewer } from './contract/ContractViewer';
 
 interface RentModalProps {
     car: Car;
@@ -13,11 +14,22 @@ interface RentModalProps {
     onNeedKYC: () => void;
 }
 
+type Step = 'dates' | 'contract' | 'payment';
+
 export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfirm, onClose, onNeedKYC }) => {
     const today = new Date().toISOString().split('T')[0];
+    const [step, setStep] = useState<Step>('dates');
+
+    // Rental State
     const [startDate, setStartDate] = useState(today);
     const [endDate, setEndDate] = useState('');
     const [showPayment, setShowPayment] = useState(false);
+
+    // Contract State
+    const [contractSigned, setContractSigned] = useState(false);
+    // In a real app, we would save these to send to the backend
+    const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
+    const [contractSnapshot, setContractSnapshot] = useState<string | null>(null);
 
     const calculateDays = () => {
         if (!startDate || !endDate) return 0;
@@ -53,9 +65,9 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
     };
 
     const days = calculateDays();
-    const { total: totalPrice, plan: appliedPlan, dailyRate: effectiveDailyRate } = calculateBestPrice(days);
+    const { total: totalPrice, dailyRate: effectiveDailyRate } = calculateBestPrice(days);
 
-    const handleProceedToPayment = () => {
+    const handleProceedToContract = () => {
         if (days <= 0) {
             alert('Selecione um período válido.');
             return;
@@ -67,13 +79,48 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
             return;
         }
 
+        setStep('contract');
+    };
+
+    const handleContractSigned = (url: string, snapshot: string) => {
+        setSignatureUrl(url);
+        setContractSnapshot(snapshot);
+        setContractSigned(true);
+        setStep('payment');
         setShowPayment(true);
     };
 
     const handlePaymentSuccess = (payment: Payment) => {
+        // Here we would normally optimize by sending the contract data to the backend
+        // along with the rental creation. For now, we assume the backend handles it or we pass it later.
+        // In a full implementation, onConfirm would take these extra params.
+        console.log("Contract Signed:", signatureUrl);
+
         setShowPayment(false);
         onConfirm(startDate, endDate, totalPrice);
     };
+
+    // If showing contract, render full screen contract viewer
+    if (step === 'contract') {
+        return (
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                <div className="w-full max-w-4xl h-[90vh] animate-fade-in">
+                    <ContractViewer
+                        renter={currentUser}
+                        car={car}
+                        rentalData={{
+                            startDate,
+                            endDate,
+                            totalPrice,
+                            days
+                        }}
+                        onSigned={handleContractSigned}
+                        onCancel={() => setStep('dates')}
+                    />
+                </div>
+            </div>
+        );
+    }
 
     return (
         <>
@@ -81,7 +128,7 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
             {showPayment && (
                 <PaymentModal
                     isOpen={showPayment}
-                    onClose={() => setShowPayment(false)}
+                    onClose={() => { setShowPayment(false); setStep('dates'); }}
                     onSuccess={handlePaymentSuccess}
                     userId={currentUser.id}
                     amount={totalPrice}
@@ -90,7 +137,7 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
                 />
             )}
 
-            {/* Rent Modal */}
+            {/* Rent Modal (Date Selection) */}
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
                 <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-fade-in">
                     {/* Header */}
@@ -113,94 +160,66 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
                         </div>
                     </div>
 
-                    {/* KYC Warning */}
                     {!currentUser.isVerified && (
                         <div className="bg-amber-50 border-b border-amber-200 p-3 flex items-center gap-2">
                             <AlertTriangle className="w-5 h-5 text-amber-600" />
                             <p className="text-sm text-amber-800">
-                                <strong>Atenção:</strong> Você precisará verificar sua identidade antes de pagar.
+                                <strong>Atenção:</strong> Verificação necessária.
                             </p>
                         </div>
                     )}
 
                     {/* Content */}
                     <div className="p-6 space-y-6">
-                        <div className="flex items-center gap-3 text-slate-600 bg-slate-50 p-3 rounded-lg">
-                            <Calendar className="w-5 h-5 text-indigo-600" />
-                            <span className="font-medium">Selecione o período do aluguel</span>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Data Início</label>
-                                <input
-                                    type="date"
-                                    value={startDate}
-                                    min={today}
-                                    onChange={e => setStartDate(e.target.value)}
-                                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Data Fim</label>
-                                <input
-                                    type="date"
-                                    value={endDate}
-                                    min={startDate || today}
-                                    onChange={e => setEndDate(e.target.value)}
-                                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Price Breakdown */}
-                        <div className="bg-slate-50 rounded-xl p-4 space-y-2">
-                            <div className="flex justify-between text-slate-600">
-                                <span>Quantidade de dias</span>
-                                <span>{days} {days === 1 ? 'dia' : 'dias'}</span>
-                            </div>
-
-                            {appliedPlan !== 'Diária' && (
-                                <div className="flex items-center justify-between text-green-600 text-sm font-medium bg-green-50 p-2 rounded-md">
-                                    <span className="flex items-center gap-1">
-                                        <Tag className="w-4 h-4" /> Desconto aplicado:
-                                    </span>
-                                    <span>Plano {appliedPlan}</span>
+                        <div className="space-y-4">
+                            <h3 className="text-slate-900 font-semibold flex items-center gap-2">
+                                <Calendar className="w-5 h-5 text-indigo-600" />
+                                Período do Aluguel
+                            </h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-500 mb-1">Retirada</label>
+                                    <input
+                                        type="date"
+                                        value={startDate}
+                                        min={today}
+                                        onChange={e => setStartDate(e.target.value)}
+                                        className="w-full p-2 border rounded-lg text-sm"
+                                    />
                                 </div>
-                            )}
-
-                            <div className="flex justify-between text-slate-600 text-sm">
-                                <span>Custo médio por dia</span>
-                                <span>R$ {effectiveDailyRate.toFixed(2)}</span>
-                            </div>
-
-                            <div className="border-t border-slate-200 pt-2 flex justify-between font-bold text-lg mt-2">
-                                <span>Total Estimado</span>
-                                <span className="text-indigo-600">R$ {totalPrice.toFixed(2)}</span>
-                            </div>
-                        </div>
-
-                        {/* Payment Methods Info */}
-                        <div className="flex items-center justify-center gap-6 py-2">
-                            <div className="flex items-center gap-2 text-slate-500 text-xs">
-                                <CreditCard className="w-4 h-4" />
-                                <span>Cartão</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-slate-500 text-xs">
-                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M9.5 4C5.36 4 2 7.36 2 11.5C2 15.64 5.36 19 9.5 19H11V21H13V19H14.5C18.64 19 22 15.64 22 11.5C22 7.36 18.64 4 14.5 4H9.5ZM9.5 6H14.5C17.53 6 20 8.47 20 11.5C20 14.53 17.53 17 14.5 17H9.5C6.47 17 4 14.53 4 11.5C4 8.47 6.47 6 9.5 6Z" />
-                                </svg>
-                                <span>PIX</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-slate-500 text-xs">
-                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M21 11H3V9H21V11ZM21 13H3V15H21V13ZM12 17H3V19H12V17ZM12 5H3V7H12V5Z" />
-                                </svg>
-                                <span>Boleto</span>
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-500 mb-1">Devolução</label>
+                                    <input
+                                        type="date"
+                                        value={endDate}
+                                        min={startDate || today}
+                                        onChange={e => setEndDate(e.target.value)}
+                                        className="w-full p-2 border rounded-lg text-sm"
+                                    />
+                                </div>
                             </div>
                         </div>
 
-                        {/* Actions */}
+                        {/* Summary Card */}
+                        <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                            <h4 className="text-sm font-semibold text-slate-700 mb-3">Resumo de Valores</h4>
+                            <div className="space-y-2 text-sm">
+                                <div className="flex justify-between text-slate-600">
+                                    <span>Diária ({days} dias)</span>
+                                    <span>R$ {effectiveDailyRate.toFixed(2)} / dia</span>
+                                </div>
+                                <div className="flex justify-between text-slate-600">
+                                    <span>Taxa de Serviço</span>
+                                    <span>R$ 0,00</span>
+                                </div>
+                                <div className="border-t border-slate-200 pt-2 flex justify-between font-bold text-lg mt-2">
+                                    <span className="text-slate-900">Total</span>
+                                    <span className="text-indigo-600">R$ {totalPrice.toFixed(2)}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Buttons */}
                         <div className="flex gap-3">
                             <button
                                 onClick={onClose}
@@ -209,23 +228,21 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
                                 Cancelar
                             </button>
                             <button
-                                onClick={handleProceedToPayment}
+                                onClick={handleProceedToContract}
                                 disabled={days <= 0}
-                                className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-medium hover:opacity-90 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex-1 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
                             >
-                                {currentUser.isVerified ? (
-                                    <>
-                                        <CreditCard className="w-5 h-5" />
-                                        Ir para Pagamento
-                                    </>
-                                ) : (
-                                    <>
-                                        <Shield className="w-5 h-5" />
-                                        Verificar e Pagar
-                                    </>
-                                )}
+                                <span>Continuar</span>
+                                <ArrowRight className="w-4 h-4" />
                             </button>
                         </div>
+                    </div>
+
+                    {/* Steps Indicator */}
+                    <div className="bg-slate-50 p-2 flex justify-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-indigo-600"></div>
+                        <div className="w-2 h-2 rounded-full bg-slate-200"></div>
+                        <div className="w-2 h-2 rounded-full bg-slate-200"></div>
                     </div>
                 </div>
             </div>
