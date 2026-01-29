@@ -61,14 +61,39 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
     // Payment Option State (Weekly vs Monthly)
     const [selectedOption, setSelectedOption] = useState<PaymentOption | null>(null);
+    const [localOptions, setLocalOptions] = useState<PaymentOption[]>([]);
 
-    // Initialize selected option
     useEffect(() => {
-        if (isOpen && paymentOptions && paymentOptions.length > 0) {
+        if (!isOpen) return;
+
+        if (paymentOptions && paymentOptions.length > 0) {
+            setLocalOptions(paymentOptions);
             const recommended = paymentOptions.find(o => o.recommended) || paymentOptions[0];
             setSelectedOption(recommended);
-        } else if (isOpen) {
-            // Fallback for no options (legacy behavior)
+        } else if (amount > 800) { // Fallback for High amount -> assume Monthly
+            const monthlyAmt = amount;
+            const weeklyAmt = amount / 4;
+            const fallbackOptions = [
+                {
+                    id: 'monthly',
+                    label: 'Pagamento Mensal',
+                    amount: monthlyAmt,
+                    description: `Total (Mensal)`,
+                    recommended: true
+                },
+                {
+                    id: 'weekly',
+                    label: 'Pagamento Semanal',
+                    amount: weeklyAmt,
+                    description: `Parcela Semanal`,
+                    tag: 'Flexível'
+                }
+            ];
+            setLocalOptions(fallbackOptions);
+            setSelectedOption(fallbackOptions[0]);
+        } else {
+            // Low amount, just one option
+            setLocalOptions([]);
             setSelectedOption({
                 id: 'default',
                 label: 'Total',
@@ -81,7 +106,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     // Effective Amount
     const currentAmount = selectedOption ? selectedOption.amount : amount;
     const currentDescription = selectedOption ? selectedOption.description : description;
-
 
     // Card state
     const [savedCards, setSavedCards] = useState<SavedCard[]>([]);
@@ -264,9 +288,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     <div className="p-6 overflow-y-auto max-h-[60vh]">
 
                         {/* Payment Options Selection Strategy (Weekly vs Monthly) */}
-                        {paymentOptions && paymentOptions.length > 0 && (
+                        {localOptions && localOptions.length > 0 && (
                             <div className="mb-6 bg-slate-50 p-1 rounded-xl flex">
-                                {paymentOptions.map(option => (
+                                {localOptions.map(option => (
                                     <button
                                         key={option.id}
                                         onClick={() => setSelectedOption(option)}
@@ -352,8 +376,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                             ) : method === 'boleto' ? (
                                 'Gerar Boleto'
                             ) : (
-                            ): (
-                                    `Pagar R$ ${method === 'credit_card' ? (installmentOptions[selectedInstallments - 1]?.installmentValue.toFixed(2) || currentAmount.toFixed(2)) : currentAmount.toFixed(2)}`
+                                `Pagar R$ ${method === 'credit_card' ? (installmentOptions[selectedInstallments - 1]?.installmentValue.toFixed(2) || currentAmount.toFixed(2)) : currentAmount.toFixed(2)}`
                             )}
                         </button>
 
