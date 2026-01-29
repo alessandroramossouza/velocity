@@ -48,6 +48,19 @@ export interface User {
   selfieUrl?: string;
   isVerified?: boolean;
   verificationDate?: string;
+  // Extended Profile
+  cpf?: string;
+  rg?: string;
+  cep?: string;
+  address?: string;
+  number?: string;
+  complement?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  // Document URLs
+  cpfUrl?: string; // Documento CPF/RG
+  proofResidenceUrl?: string;
   // Reputation
   averageRating?: number;
 }

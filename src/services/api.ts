@@ -229,7 +229,7 @@ export const getActiveRentals = async (ownerId: string): Promise<Rental[]> => {
 
     const { data: usersData, error: usersError } = await supabase
         .from('users')
-        .select('id, name, email')
+        .select('id, name, email, role, cpf, rg, cep, address, number, complement, neighborhood, city, state, cpfUrl:cpf_url, proofResidenceUrl:proof_residence_url, isVerified:is_verified')
         .in('id', renterIds);
 
     if (usersError) {
@@ -283,7 +283,7 @@ export const getOwnerRentalHistory = async (ownerId: string): Promise<Rental[]> 
 
     const { data: usersData, error: usersError } = await supabase
         .from('users')
-        .select('id, name, email')
+        .select('id, name, email, role, cpf, rg, cep, address, number, complement, neighborhood, city, state, cpfUrl:cpf_url, proofResidenceUrl:proof_residence_url, isVerified:is_verified')
         .in('id', renterIds);
 
     // 3. Fetch Car Details (to show car name in history)
@@ -466,24 +466,61 @@ export const getUserByEmail = async (email: string): Promise<User | null> => {
         cnhUrl: data.cnh_url,
         selfieUrl: data.selfie_url,
         isVerified: data.is_verified || false,
-        verificationDate: data.verification_date
+        verificationDate: data.verification_date,
+        cpf: data.cpf,
+        rg: data.rg,
+        cep: data.cep,
+        address: data.address,
+        number: data.number,
+        complement: data.complement,
+        neighborhood: data.neighborhood,
+        city: data.city,
+        state: data.state,
+        cpfUrl: data.cpf_url,
+        proofResidenceUrl: data.proof_residence_url
     };
 };
 
-export const registerUser = async (email: string, name: string, role: 'owner' | 'renter'): Promise<User> => {
+export const registerUser = async (email: string, name: string, role: 'owner' | 'renter' | 'partner', extendedData?: any): Promise<User> => {
     // Generate a simple ID or let DB generate if using uuid.
     // Our DB uses text ID. Let's use timestamp or random string.
     const id = Math.random().toString(36).substr(2, 9);
 
     // Check if user exists first to avoid duplicates
+
+    // ... code around ...
     const existing = await getUserByEmail(email);
     if (existing) {
         return existing;
     }
 
+    // Prepare extended data payload
+    const payload: any = { id, email, name, role };
+    if (extendedData) {
+        payload.cpf = extendedData.cpf;
+        payload.rg = extendedData.rg;
+        payload.cep = extendedData.cep;
+        payload.address = extendedData.address;
+        payload.number = extendedData.number;
+        payload.complement = extendedData.complement;
+        payload.neighborhood = extendedData.neighborhood;
+        payload.city = extendedData.city;
+        payload.state = extendedData.state;
+        // Document URLs
+        payload.cpf_url = extendedData.cpfUrl;
+        payload.proof_residence_url = extendedData.proofResidenceUrl;
+
+        // Auto verify if docs are present (simplified for demo)
+        if (extendedData.cpfUrl && extendedData.proofResidenceUrl) {
+            payload.is_verified = true;
+            payload.verification_date = new Date().toISOString();
+            payload.cnh_url = extendedData.cpfUrl; // Using same slot for now as example or create new col
+        }
+    }
+
     const { error } = await supabase
         .from('users')
-        .insert({ id, email, name, role });
+        .insert(payload);
 
     if (error) {
         console.error('Error creating user:', error);

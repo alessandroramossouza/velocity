@@ -5,12 +5,95 @@ import { getActiveRentals, completeRental, getOwnerRentalHistory, getPartners, c
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import {
   Sparkles, Plus, Car as CarIcon, DollarSign, Loader2, Upload, Pencil, RotateCcw,
-  Calendar, AlertCircle, LayoutGrid, History, ChevronRight, User as UserIcon, CheckCircle, XCircle, Wrench, Shield, CreditCard, FileText
+  Calendar, AlertCircle, LayoutGrid, History, ChevronRight, User as UserIcon, CheckCircle, XCircle, Wrench, Shield, CreditCard, FileText, Eye
 } from 'lucide-react';
 import { uploadContractTemplate } from '../services/contractService';
 import { supabase } from '../lib/supabase';
 import { PaymentModal } from './PaymentModal';
 import { Payment } from '../services/payments';
+
+const RenterDetailsModal = ({ renter, onClose }: { renter: User, onClose: () => void }) => {
+  if (!renter) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="bg-slate-900 p-6 flex justify-between items-center text-white shrink-0">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-indigo-500 flex items-center justify-center text-xl font-bold border-2 border-white/20">
+              {renter.name.charAt(0)}
+            </div>
+            <div>
+              <h2 className="text-xl font-bold">{renter.name}</h2>
+              <div className="flex items-center gap-2 text-indigo-200 text-sm">
+                <span className="bg-indigo-500/30 px-2 py-0.5 rounded text-xs">{renter.email}</span>
+                {renter.isVerified && <span className="flex items-center gap-1 text-green-400 font-medium"><CheckCircle className="w-3 h-3" /> Verificado</span>}
+              </div>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-white/70 hover:text-white transition bg-white/10 p-2 rounded-full hover:bg-white/20">
+            <XCircle className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-8 overflow-y-auto space-y-8">
+          {/* Section 1: Personal Data */}
+          <div>
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2">Dados Pessoais</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div><p className="text-xs text-slate-500 mb-1">CPF</p><p className="font-medium text-slate-900 text-lg">{renter.cpf || 'Não informado'}</p></div>
+              <div><p className="text-xs text-slate-500 mb-1">RG</p><p className="font-medium text-slate-900 text-lg">{renter.rg || 'Não informado'}</p></div>
+            </div>
+          </div>
+
+          {/* Section 2: Address */}
+          <div>
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2">Endereço Completo</h3>
+            {renter.address ? (
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="col-span-2"><p className="text-xs text-slate-500 mb-1">Logradouro</p><p className="font-medium text-slate-900">{renter.address}, {renter.number}</p></div>
+                  <div><p className="text-xs text-slate-500 mb-1">Bairro</p><p className="font-medium text-slate-900">{renter.neighborhood}</p></div>
+                  <div><p className="text-xs text-slate-500 mb-1">Complemento</p><p className="font-medium text-slate-900">{renter.complement || '-'}</p></div>
+                  <div><p className="text-xs text-slate-500 mb-1">Cidade/UF</p><p className="font-medium text-slate-900">{renter.city} / {renter.state}</p></div>
+                  <div><p className="text-xs text-slate-500 mb-1">CEP</p><p className="font-medium text-slate-900">{renter.cep}</p></div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-slate-400 italic">Endereço não cadastrado.</p>
+            )}
+          </div>
+
+          {/* Section 3: Documents */}
+          <div>
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2">Documentação</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <DocumentCard title="Documento (CPF/CNH)" url={renter.cpfUrl} icon={<FileText className="w-5 h-5" />} />
+              <DocumentCard title="Comprovante de Residência" url={renter.proofResidenceUrl} icon={<AlertCircle className="w-5 h-5" />} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const DocumentCard = ({ title, url, icon }: { title: string, url?: string, icon: any }) => (
+  <div className={`p-4 rounded-xl border-l-4 transition hover:shadow-md ${url ? 'bg-indigo-50 border-indigo-500 cursor-pointer group' : 'bg-slate-50 border-slate-300 opacity-60'}`}
+    onClick={() => url && window.open(url, '_blank')}>
+    <div className="flex items-center gap-3">
+      <div className={`p-2 rounded-full ${url ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-400'}`}>{icon}</div>
+      <div>
+        <p className="font-bold text-slate-800 text-sm">{title}</p>
+        <p className="text-xs text-slate-500 mt-0.5 group-hover:text-indigo-600 transition">
+          {url ? 'Clique para visualizar' : 'Pendente de envio'}
+        </p>
+      </div>
+      {url && <ChevronRight className="w-4 h-4 ml-auto text-indigo-400 group-hover:translate-x-1 transition" />}
+    </div>
+  </div>
+);
 
 interface OwnerDashboardProps {
   user: User;
@@ -36,6 +119,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
   const [requestNotes, setRequestNotes] = useState('');
   const [sendingRequest, setSendingRequest] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState<{ serviceRequest: ServiceRequest, partner: Partner } | null>(null);
+  const [viewingRenter, setViewingRenter] = useState<User | null>(null);
 
   // Date Filters
   const [filterStartDate, setFilterStartDate] = useState('');
@@ -461,6 +545,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
 
   return (
     <div className="space-y-8 animate-fade-in">
+      {viewingRenter && <RenterDetailsModal renter={viewingRenter} onClose={() => setViewingRenter(null)} />}
       {/* Dashboard Navigation */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="flex overflow-x-auto">
@@ -537,6 +622,9 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
                           <p className="text-xs text-slate-500 uppercase font-semibold">Devolução</p>
                           <p className="font-bold text-slate-800">{new Date(rental.endDate).toLocaleDateString()}</p>
                         </div>
+                        <button onClick={() => rental.renter && setViewingRenter(rental.renter)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition flex items-center gap-2">
+                          <Eye className="w-4 h-4" /> Ver Ficha
+                        </button>
                         <button onClick={() => handleReturnCar(rental)} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition flex items-center gap-2">
                           <RotateCcw className="w-4 h-4" /> Receber
                         </button>
@@ -718,6 +806,13 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
                               R$ {rental.totalPrice?.toFixed(2)}
                             </td>
                             <td className="p-4 text-center">
+                              <button
+                                onClick={() => rental.renter && setViewingRenter(rental.renter)}
+                                title="Ver Ficha do Locatário"
+                                className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition mr-2"
+                              >
+                                <Eye className="w-5 h-5" />
+                              </button>
                               {isActive && (
                                 <button
                                   onClick={() => handleReturnCar(rental)}
