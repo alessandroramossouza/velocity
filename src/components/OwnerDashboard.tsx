@@ -102,9 +102,10 @@ interface OwnerDashboardProps {
   onUpdateCar: (car: Car) => void;
   onCarReturned: (carId: string | number) => void;
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
+  refreshTrigger?: number;
 }
 
-export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, onAddCar, onUpdateCar, onCarReturned, showToast }) => {
+export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, onAddCar, onUpdateCar, onCarReturned, showToast, refreshTrigger = 0 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'cars' | 'history' | 'partners'>('overview');
   const [isAdding, setIsAdding] = useState(false);
   const [editingCar, setEditingCar] = useState<Car | null>(null);
@@ -172,9 +173,12 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
     };
   }, [user.id]);
 
+  // React to refreshTrigger from App (Notification Polling)
   useEffect(() => {
     loadProposals();
-  }, [user.id]);
+    loadActiveRentals();
+    if (activeTab === 'history') loadHistory();
+  }, [user.id, refreshTrigger]);
 
   const loadProposals = async () => {
     const data = await getRentalProposals(user.id);

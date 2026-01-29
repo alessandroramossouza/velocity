@@ -13,9 +13,10 @@ import { PaymentModal } from './PaymentModal';
 interface RenterHistoryProps {
     currentUser: User;
     showToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
+    refreshTrigger?: number;
 }
 
-export const RenterHistory: React.FC<RenterHistoryProps> = ({ currentUser, showToast }) => {
+export const RenterHistory: React.FC<RenterHistoryProps> = ({ currentUser, showToast, refreshTrigger = 0 }) => {
     const [rentals, setRentals] = useState<Rental[]>([]);
     const [proposals, setProposals] = useState<Rental[]>([]);
     const [loading, setLoading] = useState(true);
@@ -35,7 +36,7 @@ export const RenterHistory: React.FC<RenterHistoryProps> = ({ currentUser, showT
 
     useEffect(() => {
         loadHistory();
-    }, [currentUser.id]);
+    }, [currentUser.id, refreshTrigger]);
 
     const loadHistory = async () => {
         setLoading(true);
