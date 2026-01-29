@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { getCars, createCar, updateCar, createRental, setCarAvailability, getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from './services/api';
+import { getCars, createCar, updateCar, createRental, setCarAvailability, getNotifications, markNotificationAsRead, markAllNotificationsAsRead, createNotification } from './services/api';
 import { Car, User, Notification } from './types';
 import { OwnerDashboard } from './components/OwnerDashboard';
 import { PartnerDashboard } from './components/PartnerDashboard';
@@ -27,10 +27,15 @@ function AppContent() {
   // Sound Effect
   const playNotificationSound = () => {
     try {
-      // Using a pleasant chime sound
+      // MEGA ULTRA FORTE Sound - Louder and more distinct
       const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-      audio.volume = 0.5;
-      audio.play().catch(e => console.log('Audio play blocked:', e));
+      // Alternative robust sound: 'https://codeskulptor-demos.commondatastorage.googleapis.com/pang/paza-moduless.mp3'
+      // keeping the mixkit one but ensuring volume is max.
+      audio.volume = 1.0;
+      audio.play().catch(e => {
+        console.log('Audio play blocked (likely requires user interaction first):', e);
+        // Fallback or retry logic could go here, but usually browser blocking is strict.
+      });
     } catch (e) {
       console.error('Audio error:', e);
     }
@@ -163,6 +168,28 @@ function AppContent() {
         c.id === carId ? { ...c, isAvailable: false } : c
       ));
 
+      // NOTIFICATIONS - MEGA ULTRA SYSTEM
+      // 1. Notify Owner
+      await createNotification({
+        userId: car.ownerId,
+        type: 'rental_request',
+        title: '🚗 Nova Solicitação de Aluguel',
+        message: `Você recebeu uma nova solicitação de aluguel para o ${car.make} ${car.model}. Verifique suas propostas.`,
+        link: '/owner/proposals' // imaginary link logic
+      });
+
+      // 2. Notify Renter (Confirmation)
+      await createNotification({
+        userId: currentUser.id,
+        type: 'rental_request',
+        title: '✅ Solicitação Enviada',
+        message: `Sua solicitação para o ${car.make} ${car.model} foi enviada com sucesso! Aguarde a aprovação do locador.`,
+        link: '/renter/history'
+      });
+
+      // 3. Trigger Sound for immediate feedback
+      playNotificationSound();
+
       showToast(`Aluguel confirmado! Total: R$ ${totalPrice.toFixed(2)}`, 'success');
     } catch (e) {
       console.error(e);
@@ -216,6 +243,26 @@ function AppContent() {
             </div>
 
             <div className="flex items-center gap-4">
+              {/* Test Notification Button (Hidden in Mobile) */}
+              <button
+                onClick={async () => {
+                  if (!currentUser) return;
+                  playNotificationSound();
+                  await createNotification({
+                    userId: currentUser.id,
+                    type: 'general',
+                    title: '🔔 Teste de Notificação',
+                    message: 'O sistema de notificações Mega Ultra está ativo e operante!',
+                    link: undefined
+                  });
+                  showToast('Notificação de teste enviada!', 'success');
+                }}
+                className="hidden md:flex items-center gap-1 px-3 py-1 bg-slate-100 hover:bg-slate-200 text-xs text-slate-600 rounded-full transition"
+              >
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                Testar Alerta
+              </button>
+
               {currentUser.role === 'renter' && (
                 <div className="hidden md:flex bg-slate-100 rounded-lg p-1 mr-4">
                   <button
