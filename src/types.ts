@@ -73,7 +73,8 @@ export interface Rental {
   startDate: string;
   endDate: string;
   totalPrice: number;
-  status: 'active' | 'completed' | 'cancelled';
+  status: 'active' | 'completed' | 'cancelled' | 'proposal';
+  rentalType?: 'daily' | 'uber';
   createdAt: string;
   // Joined data
   car?: Car;

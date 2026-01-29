@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Car, ChatMessage, User } from '../types';
 import { getCarRecommendations } from '../services/geminiService';
-import { addFavorite, removeFavorite, getFavorites } from '../services/api';
+import { addFavorite, removeFavorite, getFavorites, createRentalProposal } from '../services/api';
 import {
   Search, MessageCircle, Send, Loader2, Heart, Star, Share2, Copy, Check,
   ArrowUpDown, Filter, X, Car as CarIcon, Sparkles, Eye, Calendar, Fuel, Gauge, MapPin, Shield, Info
@@ -149,6 +149,20 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars, curr
     if (!selectedCar) return;
     await onRentCar(selectedCar.id, startDate, endDate, totalPrice);
     setSelectedCar(null);
+  };
+
+  const handleSendProposal = async (startDate: string, months: number, offerPrice: number) => {
+    if (!selectedCar) return;
+    const start = new Date(startDate);
+    const end = new Date(start);
+    end.setDate(end.getDate() + (months * 30));
+    const endDateStr = end.toISOString().split('T')[0];
+
+    try {
+      await createRentalProposal(String(selectedCar.id), currentUser.id, selectedCar.ownerId, startDate, endDateStr, offerPrice, 'uber');
+    } catch (error) {
+      console.error('Error sending proposal', error);
+    }
   };
 
   const handleShare = async (car: Car) => {
@@ -645,6 +659,7 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars, curr
             setSelectedCar(null);
             alert('Por favor, verifique sua identidade primeiro. Clique no seu perfil.');
           }}
+          onSendProposal={handleSendProposal}
         />
       )}
     </div>

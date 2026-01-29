@@ -180,6 +180,54 @@ export const createRental = async (
     };
 };
 
+export const createRentalProposal = async (
+    carId: string | number,
+    renterId: string,
+    ownerId: string,
+    startDate: string,
+    endDate: string,
+    totalPrice: number,
+    rentalType: 'uber' | 'daily' = 'uber'
+): Promise<Rental> => {
+    // Note: If 'rental_type' column doesn't exist, we rely on 'status'='proposal'
+    // to identify pending requests.
+    const { data, error } = await supabase
+        .from('rentals')
+        .insert({
+            car_id: carId,
+            renter_id: renterId,
+            owner_id: ownerId,
+            start_date: startDate,
+            end_date: endDate,
+            total_price: totalPrice,
+            status: 'proposal'
+        })
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error creating rental proposal:', error);
+        throw new Error(error.message);
+    }
+
+    // Do NOT mark car as unavailable for proposals, owner must approve first?
+    // Actually, maybe we should to reserve it?
+    // For now, let's NOT block availability until approved.
+
+    return {
+        id: data.id,
+        carId: data.car_id,
+        renterId: data.renter_id,
+        ownerId: data.owner_id,
+        startDate: data.start_date,
+        endDate: data.end_date,
+        totalPrice: data.total_price,
+        status: data.status,
+        rentalType: rentalType,
+        createdAt: data.created_at
+    };
+};
+
 export const completeRental = async (rentalId: string, carId: string | number): Promise<void> => {
     const { error } = await supabase
         .from('rentals')
@@ -828,4 +876,71 @@ export const updateServiceRequestStatus = async (
     }
 
     return true;
+};
+
+// ============================================
+// PROPOSALS
+// ============================================
+
+export const getRentalProposals = async (ownerId: string): Promise<Rental[]> => {
+    const { data: rentalsData, error: rentalsError } = await supabase
+        .from('rentals')
+        .select(`
+            id,
+            carId:car_id,
+            renterId:renter_id,
+            ownerId:owner_id,
+            startDate:start_date,
+            endDate:end_date,
+            totalPrice:total_price,
+            status,
+            createdAt:created_at
+        `)
+        .eq('owner_id', ownerId)
+        .eq('status', 'proposal')
+        .order('created_at', { ascending: false });
+
+    if (rentalsError || !rentalsData) return [];
+
+    const rentals = rentalsData as Rental[];
+    if (rentals.length === 0) return [];
+
+    // Fetch Renters & Cars details
+    const rentersIds = [...new Set(rentals.map(r => r.renterId))];
+    const carIds = [...new Set(rentals.map(r => r.carId))];
+
+    const { data: users } = await supabase
+        .from('users')
+        .select('id, name, email, role, cpf, rg, cep, address, number, complement, neighborhood, city, state, cpfUrl:cpf_url, proofResidenceUrl:proof_residence_url, isVerified:is_verified')
+        .in('id', rentersIds);
+
+    const { data: cars } = await supabase
+        .from('cars')
+        .select('id, make, model, category, imageUrl:image_url, year')
+        .in('id', carIds);
+
+    const usersMap = new Map(users?.map(u => [u.id, u]) || []);
+    const carsMap = new Map(cars?.map(c => [c.id, c]) || []);
+
+    return rentals.map(r => ({
+        ...r,
+        renter: usersMap.get(r.renterId) as unknown as User,
+        car: carsMap.get(r.carId) as unknown as Car
+    }));
+};
+
+export const approveRentalProposal = async (rentalId: string): Promise<void> => {
+    const { error } = await supabase
+        .from('rentals')
+        .update({ status: 'active' })
+        .eq('id', rentalId);
+    if (error) throw new Error(error.message);
+};
+
+export const rejectRentalProposal = async (rentalId: string): Promise<void> => {
+    const { error } = await supabase
+        .from('rentals')
+        .update({ status: 'cancelled' })
+        .eq('id', rentalId);
+    if (error) throw new Error(error.message);
 };

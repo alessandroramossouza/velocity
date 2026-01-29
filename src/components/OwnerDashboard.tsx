@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Car, User, Rental, Partner, ServiceRequest } from '../types';
 import { analyzeCarListing } from '../services/geminiService';
-import { getActiveRentals, completeRental, getOwnerRentalHistory, getPartners, createServiceRequest, getOwnerServiceRequests } from '../services/api';
+import { getActiveRentals, completeRental, getOwnerRentalHistory, getPartners, createServiceRequest, getOwnerServiceRequests, getRentalProposals, approveRentalProposal, rejectRentalProposal } from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import {
   Sparkles, Plus, Car as CarIcon, DollarSign, Loader2, Upload, Pencil, RotateCcw,
@@ -110,6 +110,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
   const [editingCar, setEditingCar] = useState<Car | null>(null);
   const [loadingAI, setLoadingAI] = useState(false);
   const [activeRentals, setActiveRentals] = useState<Rental[]>([]);
+  const [proposals, setProposals] = useState<Rental[]>([]);
   const [rentalHistory, setRentalHistory] = useState<Rental[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [partners, setPartners] = useState<Partner[]>([]);
@@ -158,7 +159,9 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
           loadActiveRentals();
           if (activeTab === 'history') loadHistory(); // Reload history if active
           if (payload.eventType === 'INSERT') {
-            showToast('Novo aluguel recebido!', 'success');
+            showToast('Nova atividade recebida!', 'info');
+            loadProposals(); // Reload proposals on new insert
+            loadActiveRentals();
           }
         }
       )
@@ -168,6 +171,28 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
       supabase.removeChannel(channel);
     };
   }, [user.id]);
+
+  useEffect(() => {
+    loadProposals();
+  }, [user.id]);
+
+  const loadProposals = async () => {
+    const data = await getRentalProposals(user.id);
+    setProposals(data);
+  };
+
+  const handleProposalAction = async (rentalId: string, action: 'approve' | 'reject') => {
+    try {
+      if (action === 'approve') await approveRentalProposal(rentalId);
+      else await rejectRentalProposal(rentalId);
+
+      showToast(action === 'approve' ? 'Proposta Aprovada!' : 'Proposta Rejeitada', 'success');
+      loadProposals();
+      loadActiveRentals();
+    } catch (e) {
+      showToast('Erro ao processar ação.', 'error');
+    }
+  };
 
   useEffect(() => {
     if (activeTab === 'history') {
@@ -559,6 +584,53 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
       {/* OVERVIEW TAB */}
       {activeTab === 'overview' && (
         <div className="space-y-8">
+          {/* PROPOSALS SECTION */}
+          {proposals.length > 0 && (
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-6 shadow-sm relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-400 opacity-10 rounded-full blur-3xl -mr-10 -mt-10"></div>
+              <h3 className="text-xl font-bold text-amber-900 mb-4 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-amber-600 animate-pulse" />
+                Novas Propostas Pendentes ({proposals.length})
+              </h3>
+              <div className="space-y-3">
+                {proposals.map(p => {
+                  const car = p.car || myCars.find(c => String(c.id) === String(p.carId));
+                  return (
+                    <div key={p.id} className="bg-white p-4 rounded-xl shadow-sm border border-amber-100 flex flex-col md:flex-row justify-between items-center gap-4">
+                      <div className="flex items-center gap-4 flex-1">
+                        <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center text-amber-700 font-bold text-xl">
+                          {p.renter?.name.charAt(0) || '?'}
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900">{p.renter?.name} <span className="text-xs font-normal text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full ml-1">Motorista App</span></p>
+                          <p className="text-sm text-slate-600">
+                            Proposta para <strong>{car?.make} {car?.model}</strong>
+                          </p>
+                          <p className="text-xs text-amber-600 font-semibold mt-1">
+                            {new Date(p.startDate).toLocaleDateString()} até {new Date(p.endDate).toLocaleDateString()}
+                            <span className="text-slate-400 mx-1">•</span>
+                            Total: R$ {p.totalPrice.toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => p.renter && setViewingRenter(p.renter)} className="text-indigo-600 hover:bg-indigo-50 px-3 py-2 rounded-lg text-sm font-medium transition">
+                          Ver Perfil
+                        </button>
+                        <button onClick={() => handleProposalAction(p.id, 'reject')} className="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-medium transition">
+                          Rejeitar
+                        </button>
+                        <button onClick={() => handleProposalAction(p.id, 'approve')} className="bg-green-600 text-white hover:bg-green-700 px-6 py-2 rounded-lg text-sm font-bold transition shadow-lg shadow-green-200">
+                          Aprovar
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
