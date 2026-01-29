@@ -548,7 +548,7 @@ export async function generateDefaultContract(
     writeText('Fica eleito o foro da comarca da cidade do LOCADOR para dirimir dúvidas deste contrato.', 10);
     addSpace(20);
 
-    writeText(`Local e Data: ${owner.city || 'Cidade'}, ${formattedDate}.`, 10, false, 'right');
+    writeText(`Local e Data: ${ownerCity}, ${formattedDate}.`, 10, false, 'right');
     addSpace(40);
 
     // Assinaturas
