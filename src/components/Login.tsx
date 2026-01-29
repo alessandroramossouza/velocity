@@ -281,24 +281,26 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                             </div>
                         </div>
 
-                        {/* 3. Docs */}
-                        <div className="space-y-4">
-                            <h3 className="tex-sm font-bold text-slate-900 border-b pb-2 uppercase tracking-wider text-xs">3. Documentos (Opcional agora, Obrigatório p/ Alugar)</h3>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 relative">
-                                    <input type="file" accept="image/*,.pdf" onChange={(e) => e.target.files && setCpfFile(e.target.files[0])} className="absolute inset-0 opacity-0 cursor-pointer" />
-                                    <Upload className="w-6 h-6 text-slate-400 mx-auto mb-1" />
-                                    <p className="text-xs font-medium text-slate-600">Foto CPF/CNH</p>
-                                    {cpfFile && <p className="text-[10px] text-green-600 font-bold mt-1 truncate">{cpfFile.name}</p>}
-                                </div>
-                                <div className="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 relative">
-                                    <input type="file" accept="image/*,.pdf" onChange={(e) => e.target.files && setResidenceFile(e.target.files[0])} className="absolute inset-0 opacity-0 cursor-pointer" />
-                                    <MapPin className="w-6 h-6 text-slate-400 mx-auto mb-1" />
-                                    <p className="text-xs font-medium text-slate-600">Comp. Residência</p>
-                                    {residenceFile && <p className="text-[10px] text-green-600 font-bold mt-1 truncate">{residenceFile.name}</p>}
+                        {/* 3. Docs (Only for Renters as requested) */}
+                        {role === 'renter' && (
+                            <div className="space-y-4">
+                                <h3 className="tex-sm font-bold text-slate-900 border-b pb-2 uppercase tracking-wider text-xs">3. Documentos (Obrigatório p/ Alugar)</h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 relative">
+                                        <input type="file" accept="image/*,.pdf" onChange={(e) => e.target.files && setCpfFile(e.target.files[0])} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                        <Upload className="w-6 h-6 text-slate-400 mx-auto mb-1" />
+                                        <p className="text-xs font-medium text-slate-600">Foto CPF/CNH</p>
+                                        {cpfFile && <p className="text-[10px] text-green-600 font-bold mt-1 truncate">{cpfFile.name}</p>}
+                                    </div>
+                                    <div className="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 relative">
+                                        <input type="file" accept="image/*,.pdf" onChange={(e) => e.target.files && setResidenceFile(e.target.files[0])} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                        <MapPin className="w-6 h-6 text-slate-400 mx-auto mb-1" />
+                                        <p className="text-xs font-medium text-slate-600">Comp. Residência</p>
+                                        {residenceFile && <p className="text-[10px] text-green-600 font-bold mt-1 truncate">{residenceFile.name}</p>}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        )}
 
                         <button
                             type="submit"
