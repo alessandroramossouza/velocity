@@ -216,16 +216,16 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
                                 }`}
                         >
                             <Calendar className="w-4 h-4" />
-                            Aluguel Diário
+                            Particular (Diário)
                         </button>
                         <button
                             onClick={() => setMode('uber')}
-                            className={`flex-1 py-3 text-sm font-semibold flex items-center justify-center gap-2 transition-colors ${mode === 'uber' ? 'text-purple-600 border-b-2 border-purple-600 bg-purple-50/50' : 'text-slate-500 hover:text-slate-700'
+                            className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 transition-all relative overflow-hidden ${mode === 'uber' ? 'text-amber-900 border-b-2 border-amber-500 bg-amber-100' : 'text-slate-500 hover:text-slate-700'
                                 }`}
                         >
                             <CarIcon className="w-4 h-4" />
-                            Motorista App
-                            <span className="ml-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold animate-pulse">
+                            Motorista App (Mensal)
+                            <span className="ml-1 bg-red-600 text-white text-[9px] px-1.5 py-0.5 rounded-full animate-pulse shadow-sm">
                                 NOVO
                             </span>
                         </button>

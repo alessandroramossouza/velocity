@@ -150,7 +150,7 @@ function AppContent() {
                 VeloCity
               </span>
               <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium ml-2">
-                v4.0
+                v5.0 PRO
               </span>
             </div>
 
@@ -328,7 +328,7 @@ function AppContent() {
       {/* Footer */}
       < footer className="bg-slate-900 text-slate-400 py-8 mt-auto" >
         <div className="max-w-7xl mx-auto px-4 text-center">
-          <p className="text-white font-semibold">VeloCity v4.0 (PAYMENTS)</p>
+          <p className="text-white font-semibold">VeloCity v5.0 PRO (PAYMENTS)</p>
           <p className="text-sm mt-1">Aluguel inteligente de veículos</p>
         </div>
       </footer >
