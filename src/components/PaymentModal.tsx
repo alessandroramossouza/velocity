@@ -23,6 +23,17 @@ interface PaymentModalProps {
     receiverId?: string;
     rentalId?: string;
     serviceRequestId?: string;
+    // New Props for "Mega Ultra Forte" Payment Selection
+    paymentOptions?: PaymentOption[];
+}
+
+export interface PaymentOption {
+    id: string;
+    label: string;
+    amount: number;
+    description: string;
+    tag?: string;
+    recommended?: boolean;
 }
 
 type PaymentMethod = 'pix' | 'credit_card' | 'boleto';
@@ -40,12 +51,37 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     description,
     receiverId,
     rentalId,
-    serviceRequestId
+    serviceRequestId,
+    paymentOptions
 }) => {
     const [method, setMethod] = useState<PaymentMethod>('pix');
     const [loading, setLoading] = useState(false);
     const [payment, setPayment] = useState<Payment | null>(null);
     const [error, setError] = useState<string | null>(null);
+
+    // Payment Option State (Weekly vs Monthly)
+    const [selectedOption, setSelectedOption] = useState<PaymentOption | null>(null);
+
+    // Initialize selected option
+    useEffect(() => {
+        if (isOpen && paymentOptions && paymentOptions.length > 0) {
+            const recommended = paymentOptions.find(o => o.recommended) || paymentOptions[0];
+            setSelectedOption(recommended);
+        } else if (isOpen) {
+            // Fallback for no options (legacy behavior)
+            setSelectedOption({
+                id: 'default',
+                label: 'Total',
+                amount: amount,
+                description: description
+            });
+        }
+    }, [isOpen, paymentOptions, amount]);
+
+    // Effective Amount
+    const currentAmount = selectedOption ? selectedOption.amount : amount;
+    const currentDescription = selectedOption ? selectedOption.description : description;
+
 
     // Card state
     const [savedCards, setSavedCards] = useState<SavedCard[]>([]);
@@ -67,9 +103,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     useEffect(() => {
         if (isOpen && userId) {
             loadSavedCards();
-            setInstallmentOptions(calculateInstallments(amount));
         }
-    }, [isOpen, userId, amount]);
+    }, [isOpen, userId]);
+
+    useEffect(() => {
+        if (isOpen && currentAmount) {
+            setInstallmentOptions(calculateInstallments(currentAmount));
+        }
+    }, [isOpen, currentAmount]);
 
     const loadSavedCards = async () => {
         const cards = await getSavedCards(userId);
@@ -92,10 +133,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 receiverId,
                 rentalId,
                 serviceRequestId,
-                amount,
+                amount: currentAmount,
                 method,
-                description,
-                installments: selectedInstallments
+                description: currentDescription,
+                installments: selectedInstallments,
+                metaData: selectedOption ? { optionId: selectedOption.id } : undefined
             };
 
             switch (method) {
@@ -172,6 +214,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-hidden animate-slide-up">
                 {/* Header */}
+                {/* Header */}
                 <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white">
                     <div className="flex justify-between items-start">
                         <div>
@@ -179,15 +222,16 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                 <CreditCard className="w-6 h-6" />
                                 Pagamento
                             </h2>
-                            <p className="text-indigo-100 text-sm mt-1">{description}</p>
+                            <p className="text-indigo-100 text-sm mt-1">{currentDescription}</p>
                         </div>
                         <button onClick={onClose} className="p-1 hover:bg-white/20 rounded-full transition">
                             <X className="w-6 h-6" />
                         </button>
                     </div>
+
                     <div className="mt-4 bg-white/20 rounded-xl p-4">
-                        <p className="text-sm text-indigo-100">Total a pagar</p>
-                        <p className="text-3xl font-bold">R$ {amount.toFixed(2)}</p>
+                        <p className="text-sm text-indigo-100">Valor a pagar</p>
+                        <p className="text-3xl font-bold">R$ {currentAmount.toFixed(2)}</p>
                     </div>
                 </div>
 
@@ -218,6 +262,31 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 ) : (
                     // Payment method selection and forms
                     <div className="p-6 overflow-y-auto max-h-[60vh]">
+
+                        {/* Payment Options Selection Strategy (Weekly vs Monthly) */}
+                        {paymentOptions && paymentOptions.length > 0 && (
+                            <div className="mb-6 bg-slate-50 p-1 rounded-xl flex">
+                                {paymentOptions.map(option => (
+                                    <button
+                                        key={option.id}
+                                        onClick={() => setSelectedOption(option)}
+                                        className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition flex items-center justify-center gap-2 relative
+                                            ${selectedOption?.id === option.id
+                                                ? 'bg-white text-indigo-600 shadow-sm border border-slate-200'
+                                                : 'text-slate-500 hover:text-slate-700'
+                                            }`}
+                                    >
+                                        {option.label}
+                                        {option.tag && (
+                                            <span className="bg-green-100 text-green-700 text-[10px] px-1.5 py-0.5 rounded-full">
+                                                {option.tag}
+                                            </span>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
                         {/* Method Tabs */}
                         <div className="flex gap-2 mb-6">
                             {[
@@ -283,7 +352,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                             ) : method === 'boleto' ? (
                                 'Gerar Boleto'
                             ) : (
-                                `Pagar R$ ${installmentOptions[selectedInstallments - 1]?.installmentValue.toFixed(2) || amount.toFixed(2)}`
+                            ): (
+                                    `Pagar R$ ${method === 'credit_card' ? (installmentOptions[selectedInstallments - 1]?.installmentValue.toFixed(2) || currentAmount.toFixed(2)) : currentAmount.toFixed(2)}`
                             )}
                         </button>
 
@@ -431,8 +501,8 @@ const CardForm: React.FC<CardFormProps> = ({
                             key={card.id}
                             onClick={() => { setSelectedCardId(card.id); setUseNewCard(false); }}
                             className={`p-4 border-2 rounded-xl cursor-pointer transition flex items-center justify-between ${selectedCardId === card.id && !useNewCard
-                                    ? 'border-indigo-500 bg-indigo-50'
-                                    : 'border-slate-200 hover:border-slate-300'
+                                ? 'border-indigo-500 bg-indigo-50'
+                                : 'border-slate-200 hover:border-slate-300'
                                 }`}
                         >
                             <div className="flex items-center gap-3">

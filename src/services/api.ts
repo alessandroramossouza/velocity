@@ -919,7 +919,7 @@ export const getRentalProposals = async (ownerId: string): Promise<Rental[]> => 
 
     const { data: cars } = await supabase
         .from('cars')
-        .select('id, make, model, category, imageUrl:image_url, year')
+        .select('id, make, model, category, imageUrl:image_url, year, contractPdfUrl:contract_pdf_url')
         .in('id', carIds);
 
     const usersMap = new Map(users?.map(u => [u.id, u]) || []);
@@ -985,7 +985,7 @@ export const getRenterProposals = async (renterId: string): Promise<Rental[]> =>
     const carIds = [...new Set(rentals.map(r => r.carId))];
     const { data: cars } = await supabase
         .from('cars')
-        .select('id, make, model, category, imageUrl:image_url, year, ownerId:owner_id')
+        .select('id, make, model, category, imageUrl:image_url, year, ownerId:owner_id, contractPdfUrl:contract_pdf_url')
         .in('id', carIds);
     const carsMap = new Map(cars?.map(c => [c.id, c]) || []);
 
@@ -1016,5 +1016,77 @@ export const requestProposalPayment = async (rentalId: string): Promise<void> =>
         .from('rentals')
         .update({ status: 'payment_pending' })
         .eq('id', rentalId);
+    if (error) throw new Error(error.message);
+};
+
+// ============================================
+// INSTALLMENTS (WEEKLY PAYMENTS)
+// ============================================
+
+export const generateWeeklyInstallments = async (rental: Rental): Promise<void> => {
+    const startDate = new Date(rental.startDate);
+    const endDate = new Date(rental.endDate);
+    const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    // Determine number of weeks (minimum 1)
+    const weeks = Math.ceil(diffDays / 7);
+    const weeklyAmount = rental.totalPrice / weeks;
+
+    // Prepare Installments
+    const installments = [];
+    for (let i = 0; i < weeks; i++) {
+        const dueDate = new Date(startDate);
+        dueDate.setDate(startDate.getDate() + (i * 7)); // Every 7 days from start
+
+        installments.push({
+            rental_id: rental.id,
+            installment_number: i + 1,
+            due_date: dueDate.toISOString(),
+            amount: weeklyAmount,
+            status: 'pending'
+        });
+    }
+
+    const { error } = await supabase
+        .from('rental_installments')
+        .insert(installments);
+
+    if (error) {
+        console.error('Error generating installments:', error);
+        throw new Error(error.message);
+    }
+};
+
+export const getRentalInstallments = async (rentalId: string): Promise<any[]> => {
+    const { data, error } = await supabase
+        .from('rental_installments')
+        .select('*')
+        .eq('rental_id', rentalId)
+        .order('installment_number', { ascending: true });
+
+    if (error) {
+        console.error('Error fetching installments:', error);
+        return [];
+    }
+
+    return data.map((i: any) => ({
+        id: i.id,
+        rentalId: i.rental_id,
+        installmentNumber: i.installment_number,
+        dueDate: i.due_date,
+        amount: i.amount,
+        status: i.status,
+        paidAt: i.paid_at,
+        createdAt: i.created_at
+    }));
+};
+
+export const payInstallment = async (installmentId: string): Promise<void> => {
+    const { error } = await supabase
+        .from('rental_installments')
+        .update({ status: 'paid', paid_at: new Date().toISOString() })
+        .eq('id', installmentId);
+
     if (error) throw new Error(error.message);
 };

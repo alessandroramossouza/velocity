@@ -49,7 +49,7 @@ export async function uploadContractTemplate(carId: string, file: File): Promise
 export async function generateFilledContract(
     car: Car,
     user: User,
-    rental: { startDate: string; endDate: string; totalPrice: number }
+    rental: { id: string; startDate: string; endDate: string; totalPrice: number }
 ): Promise<{ pdfBytes: Uint8Array; pdfBlob: Blob } | null> {
     try {
         if (!car.contractPdfUrl) {
@@ -58,8 +58,13 @@ export async function generateFilledContract(
         }
 
         // Baixa o PDF original
-        const response = await fetch(car.contractPdfUrl);
-        const pdfBytes = await response.arrayBuffer();
+        const [pdfBuffer, ownerDataResult] = await Promise.all([
+            fetch(car.contractPdfUrl).then(res => res.arrayBuffer()),
+            car.ownerId ? supabase.from('users').select('*').eq('id', car.ownerId).single() : Promise.resolve({ data: null })
+        ]);
+
+        const pdfBytes = pdfBuffer;
+        const ownerData = ownerDataResult.data as User | null;
 
         // Carrega o PDF com pdf-lib
         const pdfDoc = await PDFDocument.load(pdfBytes);
@@ -102,8 +107,24 @@ export async function generateFilledContract(
         coverPage.drawText(`Valor da Diária: R$ ${car.pricePerDay.toFixed(2)}`, { x: 50, y, size: 10, font });
         y -= 30;
 
-        // 3. Dados do Locatário (Box com mais detalhes)
-        coverPage.drawText('2. DADOS DO LOCATÁRIO (Identificação)', { x: 50, y, size: 12, font: boldFont, color: rgb(0.2, 0.2, 0.2) });
+        // 2. Dados do Locador (Proprietário)
+        coverPage.drawText('2. DADOS DO LOCADOR (Proprietário)', { x: 50, y, size: 12, font: boldFont, color: rgb(0.2, 0.2, 0.2) });
+        y -= 20;
+        if (ownerData) {
+            coverPage.drawText(`Nome: ${ownerData.name}`, { x: 50, y, size: 10, font });
+            y -= 15;
+            const ownerDoc = `CPF: ${ownerData.cpf || 'N/A'} | RG: ${ownerData.rg || 'N/A'}`;
+            coverPage.drawText(ownerDoc, { x: 50, y, size: 10, font });
+            y -= 15;
+            const ownerAddr = `${ownerData.address || ''}, ${ownerData.number || ''} - ${ownerData.city || ''}/${ownerData.state || ''}`;
+            coverPage.drawText(`Endereço: ${ownerAddr}`, { x: 50, y, size: 10, font });
+        } else {
+            coverPage.drawText('Dados do locador não disponíveis.', { x: 50, y, size: 10, font, color: rgb(0.5, 0.5, 0.5) });
+        }
+        y -= 30;
+
+        // 3. Dados do Locatário (Identificação)
+        coverPage.drawText('3. DADOS DO LOCATÁRIO (Identificação)', { x: 50, y, size: 12, font: boldFont, color: rgb(0.2, 0.2, 0.2) });
         y -= 20;
         coverPage.drawText(`Nome Completo: ${user.name}`, { x: 50, y, size: 10, font });
         y -= 15;
@@ -122,7 +143,7 @@ export async function generateFilledContract(
         y -= 30;
 
         // 4. Detalhes da Locação
-        coverPage.drawText('3. DETALHES DA LOCAÇÃO', { x: 50, y, size: 12, font: boldFont, color: rgb(0.2, 0.2, 0.2) });
+        coverPage.drawText('4. DETALHES DA LOCAÇÃO', { x: 50, y, size: 12, font: boldFont, color: rgb(0.2, 0.2, 0.2) });
         y -= 20;
         coverPage.drawText(`Data de Retirada: ${new Date(rental.startDate).toLocaleDateString('pt-BR')}`, { x: 50, y, size: 10, font });
         y -= 15;

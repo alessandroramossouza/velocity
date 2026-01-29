@@ -141,6 +141,17 @@ export interface ChatMessage {
   text: string;
 }
 
+export interface Installment {
+  id: string;
+  rentalId: string;
+  installmentNumber: number;
+  dueDate: string;
+  amount: number;
+  status: 'pending' | 'paid' | 'overdue' | 'cancelled';
+  paidAt?: string;
+  createdAt: string;
+}
+
 export interface Partner {
   id: string;
   userId?: string;
