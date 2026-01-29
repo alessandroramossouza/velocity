@@ -78,7 +78,7 @@ function AppContent() {
 
     fetchNotifications(); // Initial
 
-    const interval = setInterval(fetchNotifications, 10000); // Poll every 10s
+    const interval = setInterval(fetchNotifications, 2000); // Poll every 2s for Real-Time feel
     return () => {
       isMounted = false;
       clearInterval(interval);
@@ -86,14 +86,19 @@ function AppContent() {
   }, [currentUser]);
 
   // Separate effect for sound trigger
-  const prevUnreadCountRef = React.useRef(0);
+  const prevNotificationsLengthRef = React.useRef(0);
   useEffect(() => {
+    // Trigger if we have MORE notifications than before (new arrival) OR unread count increased
     const currentUnread = notifications.filter(n => !n.isRead).length;
-    if (currentUnread > prevUnreadCountRef.current) {
+    const currentTotal = notifications.length;
+
+    if (currentTotal > prevNotificationsLengthRef.current && prevNotificationsLengthRef.current > 0) {
+      // New notification arrived!
       playNotificationSound();
-      showToast(`Você tem ${currentUnread} nova(s) notificação(ões)`, 'info');
+      showToast(`Nova notificação recebida!`, 'info');
     }
-    prevUnreadCountRef.current = currentUnread;
+
+    prevNotificationsLengthRef.current = currentTotal;
   }, [notifications]);
 
   const handleMarkNotificationAsRead = async (notificationId: string) => {
