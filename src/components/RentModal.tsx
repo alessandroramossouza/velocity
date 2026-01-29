@@ -4,7 +4,7 @@ import { Car, User } from '../types';
 import { Calendar, X, AlertTriangle, CreditCard, ShieldCheck, ArrowRight, ArrowLeft } from 'lucide-react';
 import { PaymentModal } from './PaymentModal';
 import { Payment } from '../services/payments';
-import { ContractViewer } from './contract/ContractViewer';
+import { ContractSignatureModal } from './ContractSignatureModal';
 
 interface RentModalProps {
     car: Car;
@@ -100,25 +100,27 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
         onConfirm(startDate, endDate, totalPrice);
     };
 
-    // If showing contract, render full screen contract viewer
+    // If showing contract, render full screen contract signature modal
     if (step === 'contract') {
         return (
-            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                <div className="w-full max-w-4xl h-[90vh] animate-fade-in">
-                    <ContractViewer
-                        renter={currentUser}
-                        car={car}
-                        rentalData={{
-                            startDate,
-                            endDate,
-                            totalPrice,
-                            days
-                        }}
-                        onSigned={handleContractSigned}
-                        onCancel={() => setStep('dates')}
-                    />
-                </div>
-            </div>
+            <ContractSignatureModal
+                isOpen={step === 'contract'}
+                onClose={() => setStep('dates')}
+                onSuccess={(url) => handleContractSigned(url, '')}
+                car={car}
+                user={currentUser}
+                rental={{
+                    id: crypto.randomUUID(), // Temporário até criarmos o rental real ou passar isso adiante
+                    startDate,
+                    endDate,
+                    totalPrice,
+                    ownerId: car.ownerId,
+                    carId: String(car.id),
+                    renterId: currentUser.id,
+                    status: 'active',
+                    createdAt: new Date().toISOString()
+                }}
+            />
         );
     }
 

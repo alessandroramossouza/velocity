@@ -14,6 +14,28 @@ export interface Car {
   features: string[];
   isAvailable: boolean;
   averageRating?: number;
+  contractPdfUrl?: string; // URL do contrato PDF customizado pelo locador
+}
+
+export interface SignedContract {
+  id: string;
+  rentalId: string;
+  carId: string;
+  renterId: string;
+  ownerId: string;
+  originalPdfUrl: string;
+  signedPdfUrl: string;
+  signatureData?: string;
+  renterName: string;
+  renterCpf?: string;
+  renterEmail: string;
+  carInfo: string;
+  rentalStartDate: string;
+  rentalEndDate: string;
+  totalPrice: number;
+  signedAt: string;
+  ipAddress?: string;
+  userAgent?: string;
 }
 
 export interface User {

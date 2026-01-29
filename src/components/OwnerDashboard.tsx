@@ -5,8 +5,9 @@ import { getActiveRentals, completeRental, getOwnerRentalHistory, getPartners, c
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import {
   Sparkles, Plus, Car as CarIcon, DollarSign, Loader2, Upload, Pencil, RotateCcw,
-  Calendar, AlertCircle, LayoutGrid, History, ChevronRight, User as UserIcon, CheckCircle, XCircle, Wrench, Shield, CreditCard
+  Calendar, AlertCircle, LayoutGrid, History, ChevronRight, User as UserIcon, CheckCircle, XCircle, Wrench, Shield, CreditCard, FileText
 } from 'lucide-react';
+import { uploadContractTemplate } from '../services/contractService';
 import { supabase } from '../lib/supabase';
 import { PaymentModal } from './PaymentModal';
 import { Payment } from '../services/payments';
@@ -54,6 +55,10 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
   // Image Upload State
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  // Contract PDF Upload State
+  const [contractFile, setContractFile] = useState<File | null>(null);
+  const [existingContractUrl, setExistingContractUrl] = useState<string | null>(null);
 
   useEffect(() => {
     loadActiveRentals();
@@ -161,6 +166,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
     setFeatures(car.features);
     setIsAdding(true);
     setImageFile(null);
+    setContractFile(null);
+    setExistingContractUrl(car.contractPdfUrl || null);
     setActiveTab('cars'); // Switch to cars tab to show form
   };
 
@@ -172,6 +179,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
 
   const resetForm = () => {
     setMake(''); setModel(''); setDescription(''); setPrice(0); setImageFile(null); setFeatures([]);
+    setContractFile(null); setExistingContractUrl(null);
   };
 
   const handleAIAnalysis = async () => {
@@ -192,9 +200,12 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
     e.preventDefault();
 
     let finalImageUrl = editingCar ? editingCar.imageUrl : `https://picsum.photos/400/300?random=${Math.random()}`;
+    let finalContractUrl = editingCar?.contractPdfUrl || undefined;
 
+    setUploading(true);
+
+    // Upload da imagem
     if (imageFile) {
-      setUploading(true);
       try {
         const fileExt = imageFile.name.split('.').pop();
         const fileName = `${Math.random()}.${fileExt}`;
@@ -214,10 +225,35 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
       } catch (error) {
         console.error('Error uploading image:', error);
         showToast('Falha no upload da imagem. Usando padrão.', 'error');
-      } finally {
-        setUploading(false);
       }
     }
+
+    // Upload do contrato PDF
+    if (contractFile) {
+      try {
+        const fileExt = contractFile.name.split('.').pop();
+        const fileName = `contract_${Date.now()}.${fileExt}`;
+        const filePath = `templates/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('contracts')
+          .upload(filePath, contractFile, { upsert: true });
+
+        if (uploadError) throw uploadError;
+
+        const { data } = supabase.storage
+          .from('contracts')
+          .getPublicUrl(filePath);
+
+        finalContractUrl = data.publicUrl;
+        showToast('Contrato PDF enviado com sucesso!', 'success');
+      } catch (error) {
+        console.error('Error uploading contract:', error);
+        showToast('Falha no upload do contrato PDF.', 'error');
+      }
+    }
+
+    setUploading(false);
 
     const commonData = {
       make, model, year, category,
@@ -225,6 +261,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
       pricePerWeek: priceWeek,
       pricePerMonth: priceMonth,
       description, imageUrl: finalImageUrl, features,
+      contractPdfUrl: finalContractUrl,
     };
 
     if (editingCar) {
@@ -326,6 +363,44 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
               <span className="bg-indigo-600 text-white px-4 py-2 rounded-full text-xs font-semibold">Escolher Arquivo</span>
               {imageFile ? <span className="text-green-600 font-medium">{imageFile.name}</span> : <span className="text-slate-400">Nenhum arquivo selecionado</span>}
             </label>
+          </div>
+
+          {/* Contract PDF Upload */}
+          <div className="p-4 border-2 border-dashed border-purple-300 rounded-lg bg-purple-50 hover:bg-purple-100 transition">
+            <label className="block text-sm font-medium text-purple-800 mb-2 flex items-center gap-2">
+              <FileText className="w-4 h-4" />
+              Contrato PDF (Opcional)
+            </label>
+            <p className="text-xs text-purple-600 mb-3">
+              Faça upload de um contrato personalizado. Use placeholders como: {'{{NOME_LOCATARIO}}'}, {'{{CPF_LOCATARIO}}'}, {'{{VEICULO}}'}, {'{{DATA_INICIO}}'}, {'{{DATA_FIM}}'}, {'{{VALOR_TOTAL}}'}.
+            </p>
+            <input
+              type="file"
+              accept=".pdf,application/pdf"
+              onChange={e => setContractFile(e.target.files ? e.target.files[0] : null)}
+              className="hidden"
+              id="contract-upload"
+            />
+            <label htmlFor="contract-upload" className="w-full text-sm text-purple-700 flex items-center gap-2 cursor-pointer">
+              <span className="bg-purple-600 text-white px-4 py-2 rounded-full text-xs font-semibold">Escolher PDF</span>
+              {contractFile ? (
+                <span className="text-green-600 font-medium">{contractFile.name}</span>
+              ) : existingContractUrl ? (
+                <span className="text-purple-500">Contrato já cadastrado ✓</span>
+              ) : (
+                <span className="text-purple-400">Nenhum contrato (será gerado automaticamente)</span>
+              )}
+            </label>
+            {existingContractUrl && !contractFile && (
+              <a
+                href={existingContractUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-purple-600 underline mt-2 inline-block"
+              >
+                Ver contrato atual
+              </a>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
