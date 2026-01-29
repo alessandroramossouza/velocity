@@ -63,66 +63,115 @@ export async function generateFilledContract(
 
         // Carrega o PDF com pdf-lib
         const pdfDoc = await PDFDocument.load(pdfBytes);
-        const pages = pdfDoc.getPages();
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
         const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-        // Dados para substituição
-        const replacements: Record<string, string> = {
-            '{{NOME_LOCATARIO}}': user.name,
-            '{{EMAIL_LOCATARIO}}': user.email,
-            '{{CPF_LOCATARIO}}': (user as any).cpf || 'Não informado',
-            '{{VEICULO}}': `${car.make} ${car.model} ${car.year}`,
-            '{{MARCA}}': car.make,
-            '{{MODELO}}': car.model,
-            '{{ANO}}': String(car.year),
-            '{{CATEGORIA}}': car.category,
-            '{{DATA_INICIO}}': new Date(rental.startDate).toLocaleDateString('pt-BR'),
-            '{{DATA_FIM}}': new Date(rental.endDate).toLocaleDateString('pt-BR'),
-            '{{VALOR_TOTAL}}': `R$ ${rental.totalPrice.toFixed(2)}`,
-            '{{VALOR_DIARIA}}': `R$ ${car.pricePerDay.toFixed(2)}`,
-            '{{DATA_ASSINATURA}}': new Date().toLocaleDateString('pt-BR'),
-            '{{HORA_ASSINATURA}}': new Date().toLocaleTimeString('pt-BR'),
-        };
+        // ===============================================
+        // ESTRATÉGIA ULTRA MEGA FORÇA: CAPA DEDICADA
+        // ===============================================
+        // Insere uma nova página em branco no início (Capa)
+        const coverPage = pdfDoc.insertPage(0, [595, 842]); // A4
+        const { width, height } = coverPage.getSize();
+        let y = height - 50;
 
-        // Para cada página, adiciona uma camada de texto com os dados preenchidos
-        // (Como pdf-lib não substitui texto inline facilmente, vamos adicionar um footer/header com dados)
-        const firstPage = pages[0];
-        const { width, height } = firstPage.getSize();
+        // 1. Cabeçalho da Capa
+        coverPage.drawText('TERMO DE ADESÃO AO CONTRATO DE LOCAÇÃO', {
+            x: 50,
+            y,
+            size: 16,
+            font: boldFont,
+            color: rgb(0.1, 0.1, 0.3),
+        });
+        y -= 25;
+        coverPage.drawText('Velocity - Aluguel de Carros Inteligente', {
+            x: 50,
+            y,
+            size: 10,
+            font,
+            color: rgb(0.5, 0.5, 0.5),
+        });
+        y -= 40;
 
-        // Adiciona bloco de dados do locatário no rodapé da primeira página
-        const dataBlock = `
-DADOS DO LOCATÁRIO:
-Nome: ${user.name}
-E-mail: ${user.email}
-Veículo: ${car.make} ${car.model} ${car.year}
-Período: ${new Date(rental.startDate).toLocaleDateString('pt-BR')} a ${new Date(rental.endDate).toLocaleDateString('pt-BR')}
-Valor Total: R$ ${rental.totalPrice.toFixed(2)}
-Data/Hora da Assinatura: ${new Date().toLocaleString('pt-BR')}
-    `.trim();
+        // 2. Dados do Veículo (Box)
+        coverPage.drawText('1. VEÍCULO LOCADO', { x: 50, y, size: 12, font: boldFont, color: rgb(0.2, 0.2, 0.2) });
+        y -= 20;
+        coverPage.drawText(`Marca/Modelo: ${car.make} ${car.model}`, { x: 50, y, size: 10, font });
+        y -= 15;
+        coverPage.drawText(`Ano: ${car.year} | Categoria: ${car.category}`, { x: 50, y, size: 10, font });
+        y -= 15;
+        coverPage.drawText(`Valor da Diária: R$ ${car.pricePerDay.toFixed(2)}`, { x: 50, y, size: 10, font });
+        y -= 30;
 
-        // Desenha um retângulo de fundo
-        firstPage.drawRectangle({
-            x: 30,
-            y: 30,
-            width: width - 60,
-            height: 120,
-            color: rgb(0.95, 0.95, 0.95),
-            borderColor: rgb(0.7, 0.7, 0.7),
-            borderWidth: 1,
+        // 3. Dados do Locatário (Box com mais detalhes)
+        coverPage.drawText('2. DADOS DO LOCATÁRIO (Identificação)', { x: 50, y, size: 12, font: boldFont, color: rgb(0.2, 0.2, 0.2) });
+        y -= 20;
+        coverPage.drawText(`Nome Completo: ${user.name}`, { x: 50, y, size: 10, font });
+        y -= 15;
+        coverPage.drawText(`E-mail: ${user.email}`, { x: 50, y, size: 10, font });
+        y -= 15;
+        // Tenta pegar dados estendidos se existirem no objeto user
+        const cpf = (user as any).cpf || 'N/A';
+        const rg = (user as any).rg || 'N/A';
+        const address = (user as any).address || 'Endereço não informado';
+        const city = (user as any).city || '';
+        const state = (user as any).state || '';
+
+        coverPage.drawText(`CPF: ${cpf} | RG: ${rg}`, { x: 50, y, size: 10, font });
+        y -= 15;
+        coverPage.drawText(`Endereço: ${address} - ${city}/${state}`, { x: 50, y, size: 10, font });
+        y -= 30;
+
+        // 4. Detalhes da Locação
+        coverPage.drawText('3. DETALHES DA LOCAÇÃO', { x: 50, y, size: 12, font: boldFont, color: rgb(0.2, 0.2, 0.2) });
+        y -= 20;
+        coverPage.drawText(`Data de Retirada: ${new Date(rental.startDate).toLocaleDateString('pt-BR')}`, { x: 50, y, size: 10, font });
+        y -= 15;
+        coverPage.drawText(`Data de Devolução: ${new Date(rental.endDate).toLocaleDateString('pt-BR')}`, { x: 50, y, size: 10, font });
+        y -= 15;
+        coverPage.drawText(`Total Estimado: R$ ${rental.totalPrice.toFixed(2)}`, { x: 50, y, size: 12, font: boldFont, color: rgb(0, 0.6, 0) });
+        y -= 40;
+
+        // 5. Declaração
+        const declaration = 'Declaro que li e concordo com todos os termos do contrato anexo a seguir, bem como confirmo a veracidade dos dados acima prestados.';
+        coverPage.drawText(declaration, {
+            x: 50,
+            y,
+            size: 9,
+            font,
+            color: rgb(0.3, 0.3, 0.3),
+            maxWidth: 500,
+            lineHeight: 12
         });
 
-        // Adiciona o texto dos dados
-        const lines = dataBlock.split('\n');
-        lines.forEach((line, index) => {
-            firstPage.drawText(line, {
-                x: 40,
-                y: 130 - (index * 14),
-                size: 10,
-                font: index === 0 ? boldFont : font,
-                color: rgb(0.1, 0.1, 0.1),
+        // Rodapé da capa
+        const footerY = 50;
+        coverPage.drawLine({
+            start: { x: 50, y: footerY + 10 },
+            end: { x: width - 50, y: footerY + 10 },
+            thickness: 1,
+            color: rgb(0.8, 0.8, 0.8),
+        });
+        coverPage.drawText(`Identificador da Locação: ${rental.id || 'N/A'}`, { x: 50, y: footerY, size: 8, font, color: rgb(0.6, 0.6, 0.6) });
+        coverPage.drawText(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, { x: width - 200, y: footerY, size: 8, font, color: rgb(0.6, 0.6, 0.6) });
+
+
+        // ===============================================
+        // MARCA D'ÁGUA EM TODAS AS PÁGINAS SEGUINTES
+        // ===============================================
+        const totalPages = pdfDoc.getPageCount();
+        for (let i = 1; i < totalPages; i++) {
+            const page = pdfDoc.getPage(i);
+            const { width: pWidth } = page.getSize();
+
+            // Adiciona um rodapé discreto indicando que é parte do contrato assinado pelo locatário
+            page.drawText(`Anexo - Contrato Locação - ${user.name} - ${new Date().toLocaleDateString('pt-BR')}`, {
+                x: 30,
+                y: 20,
+                size: 8,
+                font,
+                color: rgb(0.5, 0.5, 0.5),
             });
-        });
+        }
 
         // Salva o PDF modificado
         const modifiedPdfBytes = await pdfDoc.save();
