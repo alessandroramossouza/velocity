@@ -232,24 +232,34 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
     if (contractFile) {
       try {
         const fileExt = contractFile.name.split('.').pop();
+        // Simplificado: Sem pasta templates para evitar erro de permissão em pasta
         const fileName = `contract_${Date.now()}.${fileExt}`;
-        const filePath = `templates/${fileName}`;
 
-        const { error: uploadError } = await supabase.storage
+        console.log('Iniciando upload do contrato para bucket contracts:', fileName);
+
+        const { error: uploadError, data: uploadData } = await supabase.storage
           .from('contracts')
-          .upload(filePath, contractFile, { upsert: true });
+          .upload(fileName, contractFile, {
+            cacheControl: '3600',
+            upsert: false // Mudado para false para teste
+          });
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          console.error('Detalhes do erro de upload:', uploadError);
+          throw uploadError;
+        }
+
+        console.log('Upload sucesso:', uploadData);
 
         const { data } = supabase.storage
           .from('contracts')
-          .getPublicUrl(filePath);
+          .getPublicUrl(fileName);
 
         finalContractUrl = data.publicUrl;
         showToast('Contrato PDF enviado com sucesso!', 'success');
-      } catch (error) {
-        console.error('Error uploading contract:', error);
-        showToast('Falha no upload do contrato PDF.', 'error');
+      } catch (error: any) {
+        console.error('Error uploading contract COMPLETELY:', error);
+        showToast(`Falha no upload: ${error.message || 'Erro desconhecido'}`, 'error');
       }
     }
 
