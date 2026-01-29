@@ -205,7 +205,7 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars, curr
     <div className="space-y-6">
       {/* Breadcrumbs */}
       <div className="flex items-center gap-2 text-sm text-slate-500">
-        <span className="hover:text-indigo-600 cursor-pointer transition">Home</span>
+        <span className="hover:text-indigo-600 cursor-pointer transition">Início</span>
         <span>›</span>
         <span className="hover:text-indigo-600 cursor-pointer transition">Marketplace</span>
         {selectedCategory && (
