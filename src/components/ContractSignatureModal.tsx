@@ -25,17 +25,7 @@ interface ContractSignatureModalProps {
     onSuccess: (signedPdfUrl: string) => void;
     car: Car;
     user: User;
-    rental: {
-        id: string;
-        startDate: string;
-        endDate: string;
-        totalPrice: number;
-        ownerId: string;
-        carId: string;
-        renterId: string;
-        status: 'active' | 'completed' | 'cancelled';
-        createdAt: string;
-    };
+    rental: Rental;
 }
 
 export const ContractSignatureModal: React.FC<ContractSignatureModalProps> = ({
@@ -188,8 +178,8 @@ export const ContractSignatureModal: React.FC<ContractSignatureModalProps> = ({
                             return (
                                 <div key={label} className="flex items-center gap-2">
                                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${isCompleted ? 'bg-green-500 text-white' :
-                                            isActive ? 'bg-indigo-600 text-white' :
-                                                'bg-slate-200 text-slate-500'
+                                        isActive ? 'bg-indigo-600 text-white' :
+                                            'bg-slate-200 text-slate-500'
                                         }`}>
                                         {isCompleted ? <Check className="w-4 h-4" /> : index + 1}
                                     </div>

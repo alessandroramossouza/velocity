@@ -893,11 +893,14 @@ export const getRentalProposals = async (ownerId: string): Promise<Rental[]> => 
             startDate:start_date,
             endDate:end_date,
             totalPrice:total_price,
+            totalPrice:total_price,
             status,
-            createdAt:created_at
+            createdAt:created_at,
+            contractUrl:contract_url,
+            signedContractUrl:signed_contract_url
         `)
         .eq('owner_id', ownerId)
-        .eq('status', 'proposal')
+        .in('status', ['proposal', 'proposal_submitted', 'contract_pending_signature', 'contract_signed', 'payment_pending'])
         .order('created_at', { ascending: false });
 
     if (rentalsError || !rentalsData) return [];
@@ -941,6 +944,77 @@ export const rejectRentalProposal = async (rentalId: string): Promise<void> => {
     const { error } = await supabase
         .from('rentals')
         .update({ status: 'cancelled' })
+        .eq('id', rentalId);
+    if (error) throw new Error(error.message);
+};
+
+export const confirmProposalPayment = async (rentalId: string): Promise<void> => {
+    const { error } = await supabase
+        .from('rentals')
+        .update({ status: 'active' })
+        .eq('id', rentalId);
+    if (error) throw new Error(error.message);
+};
+
+export const getRenterProposals = async (renterId: string): Promise<Rental[]> => {
+    const { data: rentalsData, error: rentalsError } = await supabase
+        .from('rentals')
+        .select(`
+            id,
+            carId:car_id,
+            renterId:renter_id,
+            ownerId:owner_id,
+            startDate:start_date,
+            endDate:end_date,
+            totalPrice:total_price,
+            status,
+            createdAt:created_at,
+            contractUrl:contract_url,
+            signedContractUrl:signed_contract_url
+        `)
+        .eq('renter_id', renterId)
+        .in('status', ['proposal', 'proposal_submitted', 'contract_pending_signature', 'contract_signed', 'payment_pending'])
+        .order('created_at', { ascending: false });
+
+    if (rentalsError || !rentalsData) return [];
+    if (rentalsData.length === 0) return [];
+
+    const rentals = rentalsData as Rental[];
+
+    // Fetch Cars details
+    const carIds = [...new Set(rentals.map(r => r.carId))];
+    const { data: cars } = await supabase
+        .from('cars')
+        .select('id, make, model, category, imageUrl:image_url, year, ownerId:owner_id')
+        .in('id', carIds);
+    const carsMap = new Map(cars?.map(c => [c.id, c]) || []);
+
+    return rentals.map(r => ({
+        ...r,
+        car: carsMap.get(r.carId) as unknown as Car
+    }));
+};
+
+export const uploadProposalContract = async (rentalId: string, contractUrl: string): Promise<void> => {
+    const { error } = await supabase
+        .from('rentals')
+        .update({ status: 'contract_pending_signature', contract_url: contractUrl })
+        .eq('id', rentalId);
+    if (error) throw new Error(error.message);
+};
+
+export const signProposalContract = async (rentalId: string, signedContractUrl: string): Promise<void> => {
+    const { error } = await supabase
+        .from('rentals')
+        .update({ status: 'contract_signed', signed_contract_url: signedContractUrl })
+        .eq('id', rentalId);
+    if (error) throw new Error(error.message);
+};
+
+export const requestProposalPayment = async (rentalId: string): Promise<void> => {
+    const { error } = await supabase
+        .from('rentals')
+        .update({ status: 'payment_pending' })
         .eq('id', rentalId);
     if (error) throw new Error(error.message);
 };

@@ -126,7 +126,7 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars, curr
       const recommendedIds = await getCarRecommendations(userMsg, cars);
 
       if (recommendedIds.length > 0) {
-        setFilteredCars(cars.filter(c => recommendedIds.includes(c.id)));
+        setFilteredCars(cars.filter(c => recommendedIds.includes(String(c.id))));
         setChatMessages(prev => [...prev, {
           role: 'model',
           text: `Encontrei ${recommendedIds.length} carros perfeitos para você! Filtrei a lista abaixo.`

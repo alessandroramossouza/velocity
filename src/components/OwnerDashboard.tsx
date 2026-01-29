@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Car, User, Rental, Partner, ServiceRequest } from '../types';
 import { analyzeCarListing } from '../services/geminiService';
-import { getActiveRentals, completeRental, getOwnerRentalHistory, getPartners, createServiceRequest, getOwnerServiceRequests, getRentalProposals, approveRentalProposal, rejectRentalProposal } from '../services/api';
+import { getActiveRentals, completeRental, getOwnerRentalHistory, getPartners, createServiceRequest, getOwnerServiceRequests, getRentalProposals, approveRentalProposal, rejectRentalProposal, uploadProposalContract, requestProposalPayment } from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import {
   Sparkles, Plus, Car as CarIcon, DollarSign, Loader2, Upload, Pencil, RotateCcw,
-  Calendar, AlertCircle, LayoutGrid, History, ChevronRight, User as UserIcon, CheckCircle, XCircle, Wrench, Shield, CreditCard, FileText, Eye
+  Calendar, AlertCircle, LayoutGrid, History, ChevronRight, User as UserIcon, CheckCircle, XCircle, Wrench, Shield, CreditCard, FileText, Eye, UploadCloud, Clock
 } from 'lucide-react';
 import { uploadContractTemplate } from '../services/contractService';
 import { supabase } from '../lib/supabase';
@@ -191,6 +191,43 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
       loadActiveRentals();
     } catch (e) {
       showToast('Erro ao processar ação.', 'error');
+    }
+  };
+
+  const handleContractUpload = async (rentalId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `proposal_${rentalId}_${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('contracts')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('contracts')
+        .getPublicUrl(fileName);
+
+      await uploadProposalContract(rentalId, publicUrl);
+      showToast('Contrato enviado com sucesso!', 'success');
+      loadProposals();
+    } catch (error) {
+      console.error(error);
+      showToast('Erro ao enviar contrato.', 'error');
+    }
+  };
+
+  const handleRequestPayment = async (rentalId: string) => {
+    try {
+      await requestProposalPayment(rentalId);
+      showToast('Solicitação de pagamento enviada!', 'success');
+      loadProposals();
+    } catch (e) {
+      showToast('Erro ao solicitar pagamento', 'error');
     }
   };
 
@@ -595,34 +632,103 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
               <div className="space-y-3">
                 {proposals.map(p => {
                   const car = p.car || myCars.find(c => String(c.id) === String(p.carId));
+
+                  // Status determination
+                  let step = 1;
+                  if (p.status === 'contract_pending_signature') step = 2;
+                  if (p.status === 'contract_signed') step = 3;
+                  if (p.status === 'payment_pending') step = 4;
+
                   return (
-                    <div key={p.id} className="bg-white p-4 rounded-xl shadow-sm border border-amber-100 flex flex-col md:flex-row justify-between items-center gap-4">
-                      <div className="flex items-center gap-4 flex-1">
-                        <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center text-amber-700 font-bold text-xl">
-                          {p.renter?.name.charAt(0) || '?'}
+                    <div key={p.id} className="bg-white p-5 rounded-xl shadow-sm border border-amber-100 flex flex-col gap-4 transition hover:shadow-md">
+                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-50 pb-4">
+                        <div className="flex items-center gap-4 flex-1">
+                          <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center text-amber-700 font-bold text-xl">
+                            {p.renter?.name.charAt(0) || '?'}
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-900 flex items-center gap-2">
+                              {p.renter?.name}
+                              <span className="text-xs font-normal text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">Motorista App</span>
+                              {step === 3 && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Assinado</span>}
+                            </p>
+                            <p className="text-sm text-slate-600">
+                              Interesse em <strong>{car?.make} {car?.model}</strong>
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-bold text-slate-900">{p.renter?.name} <span className="text-xs font-normal text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full ml-1">Motorista App</span></p>
-                          <p className="text-sm text-slate-600">
-                            Proposta para <strong>{car?.make} {car?.model}</strong>
-                          </p>
-                          <p className="text-xs text-amber-600 font-semibold mt-1">
-                            {new Date(p.startDate).toLocaleDateString()} até {new Date(p.endDate).toLocaleDateString()}
-                            <span className="text-slate-400 mx-1">•</span>
-                            Total: R$ {p.totalPrice.toFixed(2)}
-                          </p>
+                        <div className="text-right">
+                          <p className="font-bold text-slate-900">R$ {p.totalPrice.toFixed(2)}</p>
+                          <p className="text-xs text-slate-500">{new Date(p.startDate).toLocaleDateString()} - {new Date(p.endDate).toLocaleDateString()}</p>
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => p.renter && setViewingRenter(p.renter)} className="text-indigo-600 hover:bg-indigo-50 px-3 py-2 rounded-lg text-sm font-medium transition">
-                          Ver Perfil
-                        </button>
-                        <button onClick={() => handleProposalAction(p.id, 'reject')} className="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-medium transition">
-                          Rejeitar
-                        </button>
-                        <button onClick={() => handleProposalAction(p.id, 'approve')} className="bg-green-600 text-white hover:bg-green-700 px-6 py-2 rounded-lg text-sm font-bold transition shadow-lg shadow-green-200">
-                          Aprovar
-                        </button>
+
+                      {/* Timeline Stepper */}
+                      <div className="flex items-center justify-between px-4 py-2 bg-slate-50 rounded-lg relative overflow-hidden">
+                        <div className="absolute left-0 right-0 top-1/2 h-0.5 bg-slate-200 z-0"></div>
+                        <div className="absolute left-0 top-1/2 h-0.5 bg-indigo-500 z-0 transition-all duration-500" style={{ width: `${(step - 1) * 33}%` }}></div>
+                        {[1, 2, 3, 4].map(s => {
+                          const isCompleted = step >= s;
+                          // const isCurrent = step === s;
+                          return (
+                            <div key={s} className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${isCompleted ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-300 text-slate-400'}`}>
+                              {s}
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      {/* Action Footer */}
+                      <div className="flex justify-between items-center pt-2">
+                        <p className="text-sm text-slate-600 font-medium">
+                          {step === 1 && 'Aguardando envio do contrato.'}
+                          {step === 2 && 'Aguardando assinatura do locatário.'}
+                          {step === 3 && 'Contrato assinado! Libere o pagamento.'}
+                          {step === 4 && 'Aguardando pagamento do locatário.'}
+                        </p>
+
+                        <div className="flex gap-2">
+                          <button onClick={() => handleProposalAction(p.id, 'reject')} className="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg text-sm font-medium transition">
+                            Cancelar
+                          </button>
+
+                          {step === 1 && (
+                            <div className="relative">
+                              <input
+                                type="file"
+                                accept=".pdf"
+                                onChange={(e) => handleContractUpload(p.id, e)}
+                                className="absolute inset-0 opacity-0 cursor-pointer w-full"
+                              />
+                              <button className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-2 shadow-sm">
+                                <UploadCloud className="w-4 h-4" /> Enviar Contrato
+                              </button>
+                            </div>
+                          )}
+
+                          {step === 2 && (
+                            <button disabled className="bg-slate-100 text-slate-400 px-4 py-2 rounded-lg text-sm font-medium cursor-not-allowed flex items-center gap-2">
+                              <Clock className="w-4 h-4" /> Aguardando Assinatura
+                            </button>
+                          )}
+
+                          {step === 3 && (
+                            <>
+                              <a href={p.signedContractUrl} target="_blank" rel="noreferrer" className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
+                                <FileText className="w-4 h-4" /> Ver Contrato
+                              </a>
+                              <button onClick={() => handleRequestPayment(p.id)} className="bg-green-600 text-white hover:bg-green-700 px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm flex items-center gap-2">
+                                <CreditCard className="w-4 h-4" /> Solicitar Pagamento
+                              </button>
+                            </>
+                          )}
+
+                          {step === 4 && (
+                            <button disabled className="bg-green-50 text-green-700 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 animate-pulse">
+                              <DollarSign className="w-4 h-4" /> Pagamento Pendente
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );

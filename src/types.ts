@@ -65,6 +65,16 @@ export interface User {
   averageRating?: number;
 }
 
+export type RentalStatus =
+  | 'active'
+  | 'completed'
+  | 'cancelled'
+  | 'proposal' // Legacy/Initial
+  | 'proposal_submitted'
+  | 'contract_pending_signature'
+  | 'contract_signed'
+  | 'payment_pending';
+
 export interface Rental {
   id: string;
   carId: string;
@@ -73,9 +83,12 @@ export interface Rental {
   startDate: string;
   endDate: string;
   totalPrice: number;
-  status: 'active' | 'completed' | 'cancelled' | 'proposal';
+  status: RentalStatus;
   rentalType?: 'daily' | 'uber';
   createdAt: string;
+  // Timeline specific fields
+  contractUrl?: string;
+  signedContractUrl?: string;
   // Joined data
   car?: Car;
   renter?: User;
