@@ -84,6 +84,8 @@ export const RenterHistory: React.FC<RenterHistoryProps> = ({ currentUser, showT
             setExistingReviews(reviewMap);
         }
 
+        setRentals(enrichedHistory);
+        setProposals(enrichedProposals);
         setLoading(false);
     };
 
