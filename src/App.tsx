@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { getCars, createCar, updateCar, createRental, setCarAvailability } from './services/api';
+import { getCars, createCar, updateCar, createRental, setCarAvailability, getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from './services/api';
 import { Car, User, Notification } from './types';
 import { OwnerDashboard } from './components/OwnerDashboard';
 import { PartnerDashboard } from './components/PartnerDashboard';
@@ -21,24 +21,85 @@ function AppContent() {
   const [renterView, setRenterView] = useState<'marketplace' | 'history' | 'help' | 'payments'>('marketplace');
   const [showKYC, setShowKYC] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: '1',
-      userId: '',
-      type: 'general',
-      title: 'Bem-vindo ao VeloCity!',
-      message: 'Explore nossa plataforma e encontre o carro perfeito para você.',
-      isRead: false,
-      createdAt: new Date().toISOString()
-    }
-  ]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [hasPlayedSound, setHasPlayedSound] = useState(false);
 
-  const handleMarkNotificationAsRead = (notificationId: string) => {
-    setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n));
+  // Sound Effect
+  const playNotificationSound = () => {
+    try {
+      // Using a pleasant chime sound
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      audio.volume = 0.5;
+      audio.play().catch(e => console.log('Audio play blocked:', e));
+    } catch (e) {
+      console.error('Audio error:', e);
+    }
   };
 
-  const handleMarkAllNotificationsAsRead = () => {
+  // Notification Polling
+  useEffect(() => {
+    if (!currentUser) return;
+
+    let isMounted = true;
+    let prevUnreadCount = 0;
+
+    const fetchNotifications = async () => {
+      try {
+        const data = await getNotifications(currentUser.id);
+        if (!isMounted) return;
+
+        setNotifications(prev => {
+          // Compare previous unread count to current to trigger sound
+          // We use the functional update to access the *current* state at this moment, 
+          // but efficiently we might just compare with data directly if we tracked it differently.
+          // However, to detect *changes*, we need to know what we had before.
+          // Since we can't easily access 'prev' outside, we'll relay on a simple comparison 
+          // of the fetch result vs the known state variable if we tracked it in a ref?
+          // Easier approach: Just set it. But to play sound, we need to know if it increased.
+
+          // Let's use a trusted heuristic: calculate unread from 'data'.
+          const currentUnread = data.filter(n => !n.isRead).length;
+
+          // We need to compare with the previous fetch.
+          // But 'prevUnreadCount' local var persists in the closure of the effect? No.
+          // We need a ref for previous count.
+          return data;
+        });
+
+      } catch (e) {
+        console.error('Poll error', e);
+      }
+    };
+
+    fetchNotifications(); // Initial
+
+    const interval = setInterval(fetchNotifications, 10000); // Poll every 10s
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    }
+  }, [currentUser]);
+
+  // Separate effect for sound trigger
+  const prevUnreadCountRef = React.useRef(0);
+  useEffect(() => {
+    const currentUnread = notifications.filter(n => !n.isRead).length;
+    if (currentUnread > prevUnreadCountRef.current) {
+      playNotificationSound();
+      showToast(`Você tem ${currentUnread} nova(s) notificação(ões)`, 'info');
+    }
+    prevUnreadCountRef.current = currentUnread;
+  }, [notifications]);
+
+  const handleMarkNotificationAsRead = async (notificationId: string) => {
+    setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n));
+    await markNotificationAsRead(notificationId);
+  };
+
+  const handleMarkAllNotificationsAsRead = async () => {
+    if (!currentUser) return;
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    await markAllNotificationsAsRead(currentUser.id);
   };
 
   const { showToast } = useToast();

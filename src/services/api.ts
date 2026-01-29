@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { Car, User, Rental, Review, Favorite, Partner, ServiceRequest } from '../types';
+import { Car, User, Rental, Review, Favorite, Partner, ServiceRequest, Notification } from '../types';
 
 // ============================================
 // CARS
@@ -1089,4 +1089,66 @@ export const payInstallment = async (installmentId: string): Promise<void> => {
         .eq('id', installmentId);
 
     if (error) throw new Error(error.message);
+};
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+
+export const getNotifications = async (userId: string): Promise<Notification[]> => {
+    const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        // If table doesn't exist yet, return dummy data gracefully or empty array
+        console.error('Error fetching notifications:', error);
+        return [];
+    }
+
+    return data.map((n: any) => ({
+        id: n.id,
+        userId: n.user_id,
+        type: n.type,
+        title: n.title,
+        message: n.message,
+        isRead: n.is_read,
+        link: n.link,
+        createdAt: n.created_at
+    }));
+};
+
+export const markNotificationAsRead = async (notificationId: string): Promise<void> => {
+    const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('id', notificationId);
+
+    if (error) console.error('Error marking notification as read:', error);
+};
+
+export const markAllNotificationsAsRead = async (userId: string): Promise<void> => {
+    const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', userId);
+
+    if (error) console.error('Error marking all notifications as read:', error);
+};
+
+export const createNotification = async (notification: Omit<Notification, 'id' | 'createdAt' | 'isRead'>): Promise<void> => {
+    const { error } = await supabase
+        .from('notifications')
+        .insert({
+            user_id: notification.userId,
+            type: notification.type,
+            title: notification.title,
+            message: notification.message,
+            link: notification.link,
+            is_read: false
+        });
+
+    if (error) console.error('Error creating notification:', error);
 };
