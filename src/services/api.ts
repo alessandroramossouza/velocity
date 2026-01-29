@@ -564,7 +564,30 @@ export const registerUser = async (email: string, password: string, name: string
         throw new Error(error.message);
     }
 
-    return { id, email, name, role };
+    return {
+        id,
+        email,
+        name,
+        role,
+        // Retorna dados estendidos se disponíveis para atualizar estado global
+        ...(extendedData ? {
+            cpf: extendedData.cpf,
+            rg: extendedData.rg,
+            cep: extendedData.cep,
+            address: extendedData.address,
+            number: extendedData.number,
+            complement: extendedData.complement,
+            neighborhood: extendedData.neighborhood,
+            city: extendedData.city,
+            state: extendedData.state,
+            cpfUrl: extendedData.cpfUrl,
+            proofResidenceUrl: extendedData.proofResidenceUrl,
+            // Campos de verificação simplificados
+            isVerified: extendedData.cpfUrl && extendedData.proofResidenceUrl ? true : false,
+            verificationDate: extendedData.cpfUrl && extendedData.proofResidenceUrl ? new Date().toISOString() : undefined,
+            cnhUrl: extendedData.cpfUrl // Exemplo
+        } : {})
+    };
 };
 
 // Legacy function (kept for compatibility)

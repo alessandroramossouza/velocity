@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Car, User } from '../types';
-import { Calendar, X, AlertTriangle, CreditCard, ShieldCheck, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Calendar, X, AlertTriangle, ArrowRight, Car as CarIcon, Clock, CheckCircle } from 'lucide-react';
 import { PaymentModal } from './PaymentModal';
 import { Payment } from '../services/payments';
 import { ContractSignatureModal } from './ContractSignatureModal';
@@ -12,24 +12,38 @@ interface RentModalProps {
     onConfirm: (startDate: string, endDate: string, totalPrice: number) => void;
     onClose: () => void;
     onNeedKYC: () => void;
+    onSendProposal?: (startDate: string, months: number, offerPrice: number) => void; // Nova prop para proposta Uber
 }
 
-type Step = 'dates' | 'contract' | 'payment';
+type Step = 'dates' | 'contract' | 'payment' | 'proposal_success';
+type Mode = 'daily' | 'uber';
 
-export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfirm, onClose, onNeedKYC }) => {
+export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfirm, onClose, onNeedKYC, onSendProposal }) => {
     const today = new Date().toISOString().split('T')[0];
     const [step, setStep] = useState<Step>('dates');
+    const [mode, setMode] = useState<Mode>('daily');
 
-    // Rental State
+    // Rental State - Daily
     const [startDate, setStartDate] = useState(today);
     const [endDate, setEndDate] = useState('');
-    const [showPayment, setShowPayment] = useState(false);
 
-    // Contract State
+    // Rental State - Uber
+    const [uberMonths, setUberMonths] = useState(1);
+
+    // Payment / Contract Flow
+    const [showPayment, setShowPayment] = useState(false);
     const [contractSigned, setContractSigned] = useState(false);
-    // In a real app, we would save these to send to the backend
     const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
-    const [contractSnapshot, setContractSnapshot] = useState<string | null>(null);
+
+    // Atualiza endDate automaticamente se mudar para modo Uber ou mudar meses
+    useEffect(() => {
+        if (mode === 'uber' && startDate) {
+            const start = new Date(startDate);
+            const end = new Date(start);
+            end.setDate(end.getDate() + (uberMonths * 30));
+            setEndDate(end.toISOString().split('T')[0]);
+        }
+    }, [mode, uberMonths, startDate]);
 
     const calculateDays = () => {
         if (!startDate || !endDate) return 0;
@@ -45,30 +59,25 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
         let plan = 'Diária';
         let total = days * dailyRate;
 
+        // Lógica de preço progressivo
         if (days >= 30 && car.pricePerMonth) {
-            const monthlyRate = car.pricePerMonth / 30;
-            if (monthlyRate < dailyRate) {
-                dailyRate = monthlyRate;
-                plan = 'Mensal';
-                total = (car.pricePerMonth / 30) * days;
-            }
+            dailyRate = car.pricePerMonth / 30; // Preço dia efetivo no plano mensal
+            plan = 'Mensal';
+            total = dailyRate * days;
         } else if (days >= 7 && car.pricePerWeek) {
-            const weeklyRate = car.pricePerWeek / 7;
-            if (weeklyRate < dailyRate) {
-                dailyRate = weeklyRate;
-                plan = 'Semanal';
-                total = (car.pricePerWeek / 7) * days;
-            }
+            dailyRate = car.pricePerWeek / 7;
+            plan = 'Semanal';
+            total = dailyRate * days;
         }
 
         return { total, plan, dailyRate };
     };
 
     const days = calculateDays();
-    const { total: totalPrice, dailyRate: effectiveDailyRate } = calculateBestPrice(days);
+    const { total: totalPrice, dailyRate: effectiveDailyRate, plan } = calculateBestPrice(days);
 
-    const handleProceedToContract = () => {
-        if (days <= 0) {
+    const handleAction = () => {
+        if (days <= 0 && mode === 'daily') {
             alert('Selecione um período válido.');
             return;
         }
@@ -79,28 +88,35 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
             return;
         }
 
-        setStep('contract');
+        if (mode === 'uber') {
+            // Fluxo Proposta UBER
+            if (onSendProposal) {
+                onSendProposal(startDate, uberMonths, totalPrice);
+                setStep('proposal_success');
+            } else {
+                // Fallback demo local
+                setStep('proposal_success');
+            }
+        } else {
+            // Fluxo Diário (Fluxo normal)
+            setStep('contract');
+        }
     };
 
     const handleContractSigned = (url: string, snapshot: string) => {
         setSignatureUrl(url);
-        setContractSnapshot(snapshot);
         setContractSigned(true);
         setStep('payment');
         setShowPayment(true);
     };
 
     const handlePaymentSuccess = (payment: Payment) => {
-        // Here we would normally optimize by sending the contract data to the backend
-        // along with the rental creation. For now, we assume the backend handles it or we pass it later.
-        // In a full implementation, onConfirm would take these extra params.
         console.log("Contract Signed:", signatureUrl);
-
         setShowPayment(false);
         onConfirm(startDate, endDate, totalPrice);
     };
 
-    // If showing contract, render full screen contract signature modal
+    // Render Contract Modal
     if (step === 'contract') {
         return (
             <ContractSignatureModal
@@ -110,7 +126,7 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
                 car={car}
                 user={currentUser}
                 rental={{
-                    id: crypto.randomUUID(), // Temporário até criarmos o rental real ou passar isso adiante
+                    id: crypto.randomUUID(),
                     startDate,
                     endDate,
                     totalPrice,
@@ -121,6 +137,35 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
                     createdAt: new Date().toISOString()
                 }}
             />
+        );
+    }
+
+    // Render Proposal Success
+    if (step === 'proposal_success') {
+        return (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
+                <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-8 text-center animate-fade-in relative">
+                    <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
+                        <X className="w-5 h-5" />
+                    </button>
+                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <CheckCircle className="w-8 h-8 text-green-600" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-900 mb-2">Proposta Enviada!</h3>
+                    <p className="text-slate-600 mb-6">
+                        Sua proposta de aluguel para motorista de app ({uberMonths} {uberMonths > 1 ? 'meses' : 'mês'}) foi enviada para o locador.
+                    </p>
+                    <p className="text-sm text-slate-500 mb-6 bg-slate-50 p-3 rounded-lg">
+                        Você será notificado assim que o locador aceitar. O pagamento será solicitado apenas após a aprovação.
+                    </p>
+                    <button
+                        onClick={onClose}
+                        className="w-full py-3 bg-slate-900 text-white rounded-lg font-bold hover:bg-slate-800 transition"
+                    >
+                        Entendido
+                    </button>
+                </div>
+            </div>
         );
     }
 
@@ -139,112 +184,197 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
                 />
             )}
 
-            {/* Rent Modal (Date Selection) */}
+            {/* Rent Modal (Main) */}
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
-                <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-fade-in">
-                    {/* Header */}
-                    <div className="relative">
-                        <div className="h-32 bg-gradient-to-r from-indigo-600 to-purple-600">
+                <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-fade-in flex flex-col max-h-[90vh]">
+
+                    {/* Header Image */}
+                    <div className="relative h-32 flex-shrink-0">
+                        <div className="absolute inset-0 bg-gradient-to-r from-slate-900 to-indigo-900">
                             <img
                                 src={car.imageUrl}
                                 alt={car.model}
-                                className="w-full h-full object-cover opacity-30"
+                                className="w-full h-full object-cover opacity-40"
                             />
                         </div>
-                        <div className="absolute inset-0 p-6 flex justify-between items-start">
+                        <div className="absolute inset-0 p-6 flex justify-between items-start z-10">
                             <div>
-                                <h2 className="text-xl font-bold text-white">{car.make} {car.model}</h2>
+                                <h2 className="text-xl font-bold text-white leading-tight">{car.make} {car.model}</h2>
                                 <p className="text-indigo-200 text-sm">{car.year} • {car.category}</p>
                             </div>
-                            <button onClick={onClose} className="bg-white/20 hover:bg-white/30 p-2 rounded-full transition">
+                            <button onClick={onClose} className="bg-white/10 hover:bg-white/20 p-2 rounded-full transition backdrop-blur-sm">
                                 <X className="w-5 h-5 text-white" />
                             </button>
                         </div>
                     </div>
 
+                    {/* Mode Selector */}
+                    <div className="flex border-b border-slate-100">
+                        <button
+                            onClick={() => setMode('daily')}
+                            className={`flex-1 py-3 text-sm font-semibold flex items-center justify-center gap-2 transition-colors ${mode === 'daily' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/50' : 'text-slate-500 hover:text-slate-700'
+                                }`}
+                        >
+                            <Calendar className="w-4 h-4" />
+                            Aluguel Diário
+                        </button>
+                        <button
+                            onClick={() => setMode('uber')}
+                            className={`flex-1 py-3 text-sm font-semibold flex items-center justify-center gap-2 transition-colors ${mode === 'uber' ? 'text-purple-600 border-b-2 border-purple-600 bg-purple-50/50' : 'text-slate-500 hover:text-slate-700'
+                                }`}
+                        >
+                            <CarIcon className="w-4 h-4" />
+                            Motorista App
+                            <span className="ml-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold animate-pulse">
+                                NOVO
+                            </span>
+                        </button>
+                    </div>
+
+                    {/* KYC Warning */}
                     {!currentUser.isVerified && (
-                        <div className="bg-amber-50 border-b border-amber-200 p-3 flex items-center gap-2">
-                            <AlertTriangle className="w-5 h-5 text-amber-600" />
-                            <p className="text-sm text-amber-800">
-                                <strong>Atenção:</strong> Verificação necessária.
+                        <div className="bg-amber-50 border-b border-amber-200 p-3 flex items-center gap-2 flex-shrink-0">
+                            <AlertTriangle className="w-4 h-4 text-amber-600" />
+                            <p className="text-xs text-amber-800">
+                                <strong>Verificação necessária</strong> para alugar este veículo.
                             </p>
                         </div>
                     )}
 
-                    {/* Content */}
-                    <div className="p-6 space-y-6">
+                    {/* Content Scrollable */}
+                    <div className="p-6 space-y-6 overflow-y-auto">
+
+                        {/* Mode Description */}
+                        {mode === 'uber' && (
+                            <div className="bg-purple-50 border border-purple-100 p-3 rounded-lg flex items-start gap-3">
+                                <div className="p-2 bg-purple-100 rounded-full">
+                                    <Clock className="w-4 h-4 text-purple-600" />
+                                </div>
+                                <div>
+                                    <h4 className="text-sm font-bold text-purple-900">Plano para Motoristas</h4>
+                                    <p className="text-xs text-purple-700 mt-1">
+                                        Aluguel de longo prazo com condições especiais. Envie uma proposta de meses fechados para o proprietário.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="space-y-4">
-                            <h3 className="text-slate-900 font-semibold flex items-center gap-2">
-                                <Calendar className="w-5 h-5 text-indigo-600" />
-                                Período do Aluguel
+                            <h3 className="text-slate-900 font-semibold flex items-center gap-2 text-sm uppercase tracking-wider">
+                                <Calendar className="w-4 h-4 text-slate-400" />
+                                Configurar Período
                             </h3>
+
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-500 mb-1">Retirada</label>
+                                    <label className="block text-xs font-medium text-slate-500 mb-1">Data de Retirada</label>
                                     <input
                                         type="date"
                                         value={startDate}
                                         min={today}
                                         onChange={e => setStartDate(e.target.value)}
-                                        className="w-full p-2 border rounded-lg text-sm"
+                                        className="w-full p-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
                                     />
                                 </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-500 mb-1">Devolução</label>
-                                    <input
-                                        type="date"
-                                        value={endDate}
-                                        min={startDate || today}
-                                        onChange={e => setEndDate(e.target.value)}
-                                        className="w-full p-2 border rounded-lg text-sm"
-                                    />
-                                </div>
+
+                                {mode === 'daily' ? (
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-500 mb-1">Data de Devolução</label>
+                                        <input
+                                            type="date"
+                                            value={endDate}
+                                            min={startDate || today}
+                                            onChange={e => setEndDate(e.target.value)}
+                                            className="w-full p-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <label className="block text-xs font-medium text-purple-600 mb-1">Duração (Meses)</label>
+                                        <div className="flex items-center">
+                                            <button
+                                                onClick={() => setUberMonths(Math.max(1, uberMonths - 1))}
+                                                className="w-10 h-10 border border-slate-200 rounded-l-lg hover:bg-slate-50 font-bold text-slate-600"
+                                            >
+                                                -
+                                            </button>
+                                            <div className="flex-1 h-10 flex items-center justify-center border-t border-b border-slate-200 font-semibold text-slate-900">
+                                                {uberMonths} {uberMonths === 1 ? 'Mês' : 'Meses'}
+                                            </div>
+                                            <button
+                                                onClick={() => setUberMonths(Math.min(24, uberMonths + 1))}
+                                                className="w-10 h-10 border border-slate-200 rounded-r-lg hover:bg-slate-50 font-bold text-slate-600"
+                                            >
+                                                +
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
+
+                            {/* Auto-calc date display for Uber */}
+                            {mode === 'uber' && startDate && (
+                                <p className="text-xs text-slate-500 text-right">
+                                    Devolução prevista: <strong>{new Date(endDate).toLocaleDateString()}</strong> (Auto-ajustado)
+                                </p>
+                            )}
                         </div>
 
                         {/* Summary Card */}
-                        <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                            <h4 className="text-sm font-semibold text-slate-700 mb-3">Resumo de Valores</h4>
+                        <div className={`rounded-xl p-4 border ${mode === 'uber' ? 'bg-purple-50/30 border-purple-100' : 'bg-slate-50 border-slate-100'}`}>
+                            <h4 className="text-sm font-semibold text-slate-700 mb-3 flex justify-between">
+                                Resumo de Valores
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${mode === 'uber' ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                                    {plan}
+                                </span>
+                            </h4>
                             <div className="space-y-2 text-sm">
                                 <div className="flex justify-between text-slate-600">
-                                    <span>Diária ({days} dias)</span>
+                                    <span>Diária Efetiva</span>
                                     <span>R$ {effectiveDailyRate.toFixed(2)} / dia</span>
                                 </div>
                                 <div className="flex justify-between text-slate-600">
-                                    <span>Taxa de Serviço</span>
-                                    <span>R$ 0,00</span>
+                                    <span>Duração</span>
+                                    <span>{days} dias</span>
                                 </div>
-                                <div className="border-t border-slate-200 pt-2 flex justify-between font-bold text-lg mt-2">
-                                    <span className="text-slate-900">Total</span>
-                                    <span className="text-indigo-600">R$ {totalPrice.toFixed(2)}</span>
+                                <div className="border-t border-slate-200/50 pt-2 flex justify-between font-bold text-lg mt-2">
+                                    <span className="text-slate-900">Total Estimado</span>
+                                    <span className={mode === 'uber' ? 'text-purple-600' : 'text-indigo-600'}>
+                                        R$ {totalPrice.toFixed(2)}
+                                    </span>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Buttons */}
-                        <div className="flex gap-3">
+                        {/* Action Buttons */}
+                        <div className="flex gap-3 pt-2">
                             <button
                                 onClick={onClose}
-                                className="flex-1 py-3 border border-slate-300 rounded-lg font-medium hover:bg-slate-50 transition"
+                                className="flex-1 py-3 border border-slate-300 rounded-xl font-medium hover:bg-slate-50 transition text-slate-700"
                             >
                                 Cancelar
                             </button>
                             <button
-                                onClick={handleProceedToContract}
+                                onClick={handleAction}
                                 disabled={days <= 0}
-                                className="flex-1 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
+                                className={`flex-[2] py-3 rounded-xl font-bold text-white transition flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg ${mode === 'uber'
+                                    ? 'bg-purple-600 hover:bg-purple-700 shadow-purple-200'
+                                    : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'
+                                    }`}
                             >
-                                <span>Continuar</span>
-                                <ArrowRight className="w-4 h-4" />
+                                {mode === 'uber' ? (
+                                    <>
+                                        <span>Enviar Proposta</span>
+                                        <ArrowRight className="w-4 h-4" />
+                                    </>
+                                ) : (
+                                    <>
+                                        <span>Continuar para Contrato</span>
+                                        <ArrowRight className="w-4 h-4" />
+                                    </>
+                                )}
                             </button>
                         </div>
-                    </div>
-
-                    {/* Steps Indicator */}
-                    <div className="bg-slate-50 p-2 flex justify-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-indigo-600"></div>
-                        <div className="w-2 h-2 rounded-full bg-slate-200"></div>
-                        <div className="w-2 h-2 rounded-full bg-slate-200"></div>
                     </div>
                 </div>
             </div>
