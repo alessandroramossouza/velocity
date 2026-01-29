@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { Car, ChatMessage, User } from '../types';
+import { Car, ChatMessage, User, Rental } from '../types';
 import { getCarRecommendations } from '../services/geminiService';
-import { addFavorite, removeFavorite, getFavorites, createRentalProposal } from '../services/api';
+import { addFavorite, removeFavorite, getFavorites, createRentalProposal, getRenterProposals } from '../services/api';
 import {
   Search, MessageCircle, Send, Loader2, Heart, Star, Share2, Copy, Check,
-  ArrowUpDown, Filter, X, Car as CarIcon, Sparkles, Eye, Calendar, Fuel, Gauge, MapPin, Shield, Info
+  ArrowUpDown, Filter, X, Car as CarIcon, Sparkles, Eye, Calendar, Fuel, Gauge, MapPin, Shield, Info,
+  Clock, CheckCircle, CreditCard, AlertCircle
 } from 'lucide-react';
 import { RentModal } from './RentModal';
 
@@ -40,6 +41,18 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars, curr
   // Category filter
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const categories = ['SUV', 'Sedan', 'Hatchback', 'Luxury', 'Sports'];
+
+  // Active Proposals Widget State
+  const [activeProposals, setActiveProposals] = useState<Rental[]>([]);
+
+  useEffect(() => {
+    if (currentUser) {
+      getRenterProposals(currentUser.id).then(data => {
+        const active = data.filter(p => ['proposal_submitted', 'contract_pending_signature', 'contract_signed', 'payment_pending', 'active'].includes(p.status));
+        setActiveProposals(active);
+      });
+    }
+  }, [currentUser.id]);
 
   // Load favorites on mount
   useEffect(() => {
@@ -203,6 +216,71 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars, curr
 
   return (
     <div className="space-y-6">
+
+      {/* MEGA ULTRA FORTE TIMELINE WIDGET */}
+      {activeProposals.length > 0 && (
+        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden animate-fade-in border-2 border-indigo-400">
+          <div className="absolute top-0 right-0 p-4 opacity-10">
+            <Sparkles className="w-40 h-40 animate-pulse" />
+          </div>
+          <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <Clock className="w-6 h-6 text-indigo-100" />
+            Sua Jornada - Acompanhamento em Tempo Real
+          </h3>
+
+          <div className="space-y-4">
+            {activeProposals.map(p => {
+              const car = cars.find(c => String(c.id) === String(p.carId));
+              let step = 1;
+              if (p.status === 'contract_pending_signature') step = 2;
+              if (p.status === 'contract_signed') step = 3;
+              if (p.status === 'payment_pending') step = 4;
+              if (p.status === 'active') step = 5;
+
+              return (
+                <div key={p.id} className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/20 shadow-lg">
+                  <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                        <CarIcon className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-lg text-white">{car?.make} {car?.model}</p>
+                        <p className="text-indigo-100 text-sm">Status Atual: <span className="font-bold bg-white/20 px-2 py-0.5 rounded text-white">{p.status.replace('_', ' ').toUpperCase()}</span></p>
+                      </div>
+                    </div>
+                    <div className="bg-green-500 text-white px-4 py-1.5 rounded-full text-sm font-bold shadow-lg shadow-green-900/20 animate-bounce">
+                      Passo {step} de 5
+                    </div>
+                  </div>
+
+                  {/* Stepper Logic */}
+                  <div className="relative mb-6 mx-2">
+                    <div className="absolute left-0 right-0 top-1/2 h-1 bg-indigo-900/30 rounded-full"></div>
+                    <div className="absolute left-0 top-1/2 h-1 bg-green-400 transition-all duration-1000 ease-out rounded-full shadow-[0_0_10px_rgba(74,222,128,0.5)]" style={{ width: `${((step - 1) / 4) * 100}%` }}></div>
+                    <div className="flex justify-between relative z-10">
+                      {[1, 2, 3, 4, 5].map(s => (
+                        <div key={s} className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-500 ${step >= s ? 'bg-green-500 text-white scale-110 shadow-lg border-2 border-white' : 'bg-indigo-900/50 text-indigo-300 border border-indigo-500/30'}`}>
+                          {step > s ? <Check className="w-4 h-4" /> : s}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between text-[10px] sm:text-xs text-indigo-100 font-medium px-1">
+                    <span className="text-center w-16">Envio</span>
+                    <span className="text-center w-16">Assinatura</span>
+                    <span className="text-center w-16">Assinado</span>
+                    <span className="text-center w-16">Pagamento</span>
+                    <span className="text-center w-16">Ativo</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Breadcrumbs */}
       <div className="flex items-center gap-2 text-sm text-slate-500">
         <span className="hover:text-indigo-600 cursor-pointer transition">Início</span>
