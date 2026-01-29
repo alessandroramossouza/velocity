@@ -480,8 +480,46 @@ export const getUserByEmail = async (email: string): Promise<User | null> => {
         proofResidenceUrl: data.proof_residence_url
     };
 };
+};
 
-export const registerUser = async (email: string, name: string, role: 'owner' | 'renter' | 'partner', extendedData?: any): Promise<User> => {
+export const loginUser = async (email: string, password: string): Promise<User | null> => {
+    // SECURITY NOTE: In a real production app, use supabase.auth.signInWithPassword
+    // This implementation checks against the custom 'users' table as requested for this MVP.
+    const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .eq('password', password)
+        .single();
+
+    if (error || !data) {
+        return null;
+    }
+
+    return {
+        id: data.id,
+        name: data.name,
+        email: data.email,
+        role: data.role as 'owner' | 'renter',
+        cnhUrl: data.cnh_url,
+        selfieUrl: data.selfie_url,
+        isVerified: data.is_verified || false,
+        verificationDate: data.verification_date,
+        cpf: data.cpf,
+        rg: data.rg,
+        cep: data.cep,
+        address: data.address,
+        number: data.number,
+        complement: data.complement,
+        neighborhood: data.neighborhood,
+        city: data.city,
+        state: data.state,
+        cpfUrl: data.cpf_url,
+        proofResidenceUrl: data.proof_residence_url
+    };
+};
+
+export const registerUser = async (email: string, password: string, name: string, role: 'owner' | 'renter' | 'partner', extendedData?: any): Promise<User> => {
     // Generate a simple ID or let DB generate if using uuid.
     // Our DB uses text ID. Let's use timestamp or random string.
     const id = Math.random().toString(36).substr(2, 9);
@@ -491,11 +529,11 @@ export const registerUser = async (email: string, name: string, role: 'owner' | 
     // ... code around ...
     const existing = await getUserByEmail(email);
     if (existing) {
-        return existing;
+        throw new Error('Usuário já existe com este e-mail.');
     }
 
     // Prepare extended data payload
-    const payload: any = { id, email, name, role };
+    const payload: any = { id, email, password, name, role };
     if (extendedData) {
         payload.cpf = extendedData.cpf;
         payload.rg = extendedData.rg;

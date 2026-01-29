@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User } from '../types';
-import { getUserByEmail, registerUser } from '../services/api';
+import { loginUser, registerUser } from '../services/api';
 import { LogIn, Loader2, UserPlus, Upload, ShieldCheck, MapPin, Search } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { fetchAddressByCep } from '../utils/AddressAutocomplete';
@@ -16,6 +16,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
     // Form Data
     const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [name, setName] = useState('');
     const [role, setRole] = useState<'owner' | 'renter' | 'partner'>('renter');
 
@@ -40,11 +42,11 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         setError('');
 
         try {
-            const user = await getUserByEmail(email);
+            const user = await loginUser(email, password);
             if (user) {
                 onLogin(user);
             } else {
-                setError('Usuário não encontrado. Deseja criar uma conta?');
+                setError('E-mail ou senha inválidos.');
             }
         } catch (err) {
             setError('Erro ao entrar. Tente novamente.');
@@ -72,8 +74,14 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         setLoading(true);
         setError('');
 
-        if (!name || !email || !cpf || !cep || !address || !number) {
+        if (!name || !email || !password || !cpf || !cep || !address || !number) {
             setError('Por favor, preencha todos os campos obrigatórios (*)');
+            setLoading(false);
+            return;
+        }
+
+        if (password !== confirmPassword) {
+            setError('As senhas não coincidem.');
             setLoading(false);
             return;
         }
@@ -106,7 +114,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 cpfUrl, proofResidenceUrl
             };
 
-            const newUser = await registerUser(email, name, role, extendedData);
+            const newUser = await registerUser(email, password, name, role, extendedData);
             onLogin(newUser);
 
         } catch (err: any) {
@@ -163,6 +171,16 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                                 className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none"
                             />
                         </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Senha</label>
+                            <input
+                                type="password"
+                                required
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none"
+                            />
+                        </div>
                         <button
                             type="submit"
                             disabled={loading}
@@ -200,6 +218,16 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">E-mail *</label>
                                 <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="seu@email.com" />
+                            </div>
+                            <div className="flex gap-4">
+                                <div className="flex-1">
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Senha *</label>
+                                    <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="******" />
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Confirmar Senha *</label>
+                                    <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="******" />
+                                </div>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Quero...</label>
