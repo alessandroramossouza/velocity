@@ -374,9 +374,6 @@ async function getClientIP(): Promise<string> {
 }
 
 /**
- * Gera um PDF de contrato padrão caso o locador não tenha enviado um customizado
- */
-/**
  * Gera um PDF de contrato padrão usando o texto jurídico completo fornecido
  */
 export async function generateDefaultContract(
@@ -389,18 +386,20 @@ export async function generateDefaultContract(
     let ownerName = "LOCADOR NOME";
     let ownerDoc = "CPF/RG";
     let ownerAddress = "Endereço do Locador";
+    let ownerCity = "Cidade"; // Escopo Global para a função
 
     if (car.ownerId) {
-        const { data: owner } = await supabase
+        const { data: ownerData } = await supabase
             .from('users')
             .select('*')
             .eq('id', car.ownerId)
             .single();
 
-        if (owner) {
-            ownerName = owner.name;
-            ownerDoc = `CPF ${owner.cpf || 'N/A'} - RG ${owner.rg || 'N/A'}`;
-            ownerAddress = `${owner.address || ''}, ${owner.number || ''} - ${owner.city || ''}/${owner.state || ''}`;
+        if (ownerData) {
+            ownerName = ownerData.name;
+            ownerDoc = `CPF ${ownerData.cpf || 'N/A'} - RG ${ownerData.rg || 'N/A'}`;
+            ownerAddress = `${ownerData.address || ''}, ${ownerData.number || ''} - ${ownerData.city || ''}/${ownerData.state || ''}`;
+            ownerCity = ownerData.city || "Cidade";
         }
     }
 
@@ -421,7 +420,6 @@ export async function generateDefaultContract(
 
     const valorTotal = rental.totalPrice.toFixed(2);
     // Calculo semanal aproximado apenas para preencher o texto (divisão simples)
-    const valorSemanal = (rental.totalPrice / (diffDays / 7)).toFixed(2);
 
     const today = new Date();
     const formattedDate = `${today.getDate()} de ${today.toLocaleString('pt-BR', { month: 'long' })} de ${today.getFullYear()}`;
@@ -440,7 +438,7 @@ export async function generateDefaultContract(
     const maxWid = width - (margin * 2);
 
     // Helper para quebrar linhas e paginação
-    const writeText = (text: string, size: number, isBold: boolean = false, align: 'left' | 'center' = 'left', color = rgb(0, 0, 0)) => {
+    const writeText = (text: string, size: number, isBold: boolean = false, align: 'left' | 'center' | 'right' = 'left', color = rgb(0, 0, 0)) => {
         const textFont = isBold ? boldFont : font;
         const words = text.split(' ');
         let line = '';
@@ -453,7 +451,9 @@ export async function generateDefaultContract(
             if (testWidth > maxWid && n > 0) {
                 // Imprime a linha
                 const lineWidth = textFont.widthOfTextAtSize(line, size);
-                const xPos = align === 'center' ? (width - lineWidth) / 2 : margin;
+                let xPos = margin;
+                if (align === 'center') xPos = (width - lineWidth) / 2;
+                if (align === 'right') xPos = width - margin - lineWidth;
 
                 page.drawText(line, { x: xPos, y, size, font: textFont, color });
                 y -= lineHeight;
@@ -470,7 +470,10 @@ export async function generateDefaultContract(
         }
         // Última linha
         const lineWidth = textFont.widthOfTextAtSize(line, size);
-        const xPos = align === 'center' ? (width - lineWidth) / 2 : margin;
+        let xPos = margin;
+        if (align === 'center') xPos = (width - lineWidth) / 2;
+        if (align === 'right') xPos = width - margin - lineWidth;
+
         page.drawText(line, { x: xPos, y, size, font: textFont, color });
         y -= lineHeight;
     };
