@@ -480,7 +480,6 @@ export const getUserByEmail = async (email: string): Promise<User | null> => {
         proofResidenceUrl: data.proof_residence_url
     };
 };
-};
 
 export const loginUser = async (email: string, password: string): Promise<User | null> => {
     // SECURITY NOTE: In a real production app, use supabase.auth.signInWithPassword
