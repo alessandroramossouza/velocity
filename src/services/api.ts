@@ -361,17 +361,7 @@ export const getOwnerRentalHistory = async (ownerId: string): Promise<Rental[]> 
 export const getRenterHistory = async (renterId: string): Promise<Rental[]> => {
     const { data, error } = await supabase
         .from('rentals')
-        .select(`
-            id,
-            carId:car_id,
-            renterId:renter_id,
-            ownerId:owner_id,
-            startDate:start_date,
-            endDate:end_date,
-            totalPrice:total_price,
-            status,
-            createdAt:created_at
-        `)
+        .select('*')
         .eq('renter_id', renterId)
         .order('created_at', { ascending: false });
 
@@ -380,7 +370,19 @@ export const getRenterHistory = async (renterId: string): Promise<Rental[]> => {
         return [];
     }
 
-    return data as Rental[];
+    return data.map((r: any) => ({
+        id: r.id,
+        carId: r.car_id,
+        renterId: r.renter_id,
+        ownerId: r.owner_id,
+        startDate: r.start_date,
+        endDate: r.end_date,
+        totalPrice: r.total_price,
+        status: r.status,
+        createdAt: r.created_at,
+        contractUrl: r.contract_url,
+        signedContractUrl: r.signed_contract_url
+    }));
 };
 
 // ============================================
@@ -959,19 +961,7 @@ export const confirmProposalPayment = async (rentalId: string): Promise<void> =>
 export const getRenterProposals = async (renterId: string): Promise<Rental[]> => {
     const { data: rentalsData, error: rentalsError } = await supabase
         .from('rentals')
-        .select(`
-            id,
-            carId:car_id,
-            renterId:renter_id,
-            ownerId:owner_id,
-            startDate:start_date,
-            endDate:end_date,
-            totalPrice:total_price,
-            status,
-            createdAt:created_at,
-            contractUrl:contract_url,
-            signedContractUrl:signed_contract_url
-        `)
+        .select('*')
         .eq('renter_id', renterId)
         .in('status', ['proposal', 'proposal_submitted', 'contract_pending_signature', 'contract_signed', 'payment_pending'])
         .order('created_at', { ascending: false });
@@ -979,7 +969,19 @@ export const getRenterProposals = async (renterId: string): Promise<Rental[]> =>
     if (rentalsError || !rentalsData) return [];
     if (rentalsData.length === 0) return [];
 
-    const rentals = rentalsData as Rental[];
+    const rentals = rentalsData.map((r: any) => ({
+        id: r.id,
+        carId: r.car_id,
+        renterId: r.renter_id,
+        ownerId: r.owner_id,
+        startDate: r.start_date,
+        endDate: r.end_date,
+        totalPrice: r.total_price,
+        status: r.status,
+        createdAt: r.created_at,
+        contractUrl: r.contract_url,
+        signedContractUrl: r.signed_contract_url
+    })) as Rental[];
 
     // Fetch Cars details
     const carIds = [...new Set(rentals.map(r => r.carId))];
