@@ -18,12 +18,15 @@ export const AdminDashboard: React.FC = () => {
     const [rentals, setRentals] = useState<any[]>([]);
     const [users, setUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'overview' | 'rentals' | 'users'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'rentals' | 'users' | 'payments'>('overview');
     const [searchTerm, setSearchTerm] = useState('');
 
     // Edit User Modal State
     const [editingUser, setEditingUser] = useState<any>(null);
     const [savingUser, setSavingUser] = useState(false);
+
+    // Payments state
+    const [payments, setPayments] = useState<any[]>([]);
 
     useEffect(() => {
         loadData();
@@ -39,6 +42,37 @@ export const AdminDashboard: React.FC = () => {
             setStats(statsData);
             setRentals(rentalsData);
             setUsers(usersData);
+
+            // Carregar pagamentos (extrair dos rentals com datas de vencimento)
+            const paymentsData = rentalsData.map((rental: any) => {
+                const today = new Date();
+                const endDate = new Date(rental.endDate);
+                const daysUntilDue = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                const isOverdue = daysUntilDue < 0 && rental.paymentStatus !== 'paid';
+                
+                return {
+                    id: rental.id,
+                    renter: rental.renter,
+                    owner: rental.owner,
+                    car: rental.car,
+                    amount: rental.amount,
+                    dueDate: rental.endDate,
+                    paymentStatus: isOverdue ? 'overdue' : rental.paymentStatus,
+                    daysUntilDue: daysUntilDue,
+                    daysOverdue: isOverdue ? Math.abs(daysUntilDue) : 0,
+                    startDate: rental.startDate,
+                    endDate: rental.endDate
+                };
+            });
+
+            // Ordenar por urgência (atrasados primeiro, depois por data de vencimento)
+            paymentsData.sort((a: any, b: any) => {
+                if (a.paymentStatus === 'overdue' && b.paymentStatus !== 'overdue') return -1;
+                if (a.paymentStatus !== 'overdue' && b.paymentStatus === 'overdue') return 1;
+                return a.daysUntilDue - b.daysUntilDue;
+            });
+
+            setPayments(paymentsData);
         } catch (error) {
             console.error("Failed to load admin data", error);
         } finally {
@@ -122,22 +156,34 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 {/* Navigation Tabs */}
-                <div className="flex bg-slate-100 p-1 rounded-lg self-start md:self-auto">
+                <div className="flex bg-slate-100 p-1 rounded-lg self-start md:self-auto overflow-x-auto">
                     <button
                         onClick={() => setActiveTab('overview')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition ${activeTab === 'overview' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition whitespace-nowrap ${activeTab === 'overview' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}
                     >
                         Visão Geral
                     </button>
                     <button
+                        onClick={() => setActiveTab('payments')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition whitespace-nowrap flex items-center gap-2 ${activeTab === 'payments' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}
+                    >
+                        <DollarSign className="w-4 h-4" />
+                        Pagamentos
+                        {payments.filter(p => p.paymentStatus === 'overdue').length > 0 && (
+                            <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">
+                                {payments.filter(p => p.paymentStatus === 'overdue').length}
+                            </span>
+                        )}
+                    </button>
+                    <button
                         onClick={() => setActiveTab('rentals')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition ${activeTab === 'rentals' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition whitespace-nowrap ${activeTab === 'rentals' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}
                     >
                         Aluguéis & Contratos
                     </button>
                     <button
                         onClick={() => setActiveTab('users')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition ${activeTab === 'users' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition whitespace-nowrap ${activeTab === 'users' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}
                     >
                         Usuários & Parceiros
                     </button>
@@ -340,6 +386,284 @@ export const AdminDashboard: React.FC = () => {
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'payments' && (
+                <div className="space-y-6 animate-fade-in">
+                    {/* Summary Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                            <p className="text-sm font-medium text-slate-500 mb-1">Total a Receber</p>
+                            <h3 className="text-2xl font-bold text-slate-900">
+                                R$ {payments.filter(p => p.paymentStatus !== 'paid').reduce((sum, p) => sum + p.amount, 0).toFixed(2)}
+                            </h3>
+                            <p className="text-xs text-slate-400 mt-1">
+                                {payments.filter(p => p.paymentStatus !== 'paid').length} pagamentos pendentes
+                            </p>
+                        </div>
+
+                        <div className="bg-red-50 p-5 rounded-xl shadow-sm border border-red-200">
+                            <p className="text-sm font-medium text-red-600 mb-1 flex items-center gap-2">
+                                <AlertTriangle className="w-4 h-4" />
+                                Pagamentos Atrasados
+                            </p>
+                            <h3 className="text-2xl font-bold text-red-700">
+                                {payments.filter(p => p.paymentStatus === 'overdue').length}
+                            </h3>
+                            <p className="text-xs text-red-500 mt-1">
+                                R$ {payments.filter(p => p.paymentStatus === 'overdue').reduce((sum, p) => sum + p.amount, 0).toFixed(2)} em atraso
+                            </p>
+                        </div>
+
+                        <div className="bg-yellow-50 p-5 rounded-xl shadow-sm border border-yellow-200">
+                            <p className="text-sm font-medium text-yellow-600 mb-1 flex items-center gap-2">
+                                <Clock className="w-4 h-4" />
+                                Vencendo em 7 dias
+                            </p>
+                            <h3 className="text-2xl font-bold text-yellow-700">
+                                {payments.filter(p => p.daysUntilDue >= 0 && p.daysUntilDue <= 7 && p.paymentStatus !== 'paid').length}
+                            </h3>
+                            <p className="text-xs text-yellow-500 mt-1">
+                                Exigem atenção em breve
+                            </p>
+                        </div>
+
+                        <div className="bg-green-50 p-5 rounded-xl shadow-sm border border-green-200">
+                            <p className="text-sm font-medium text-green-600 mb-1 flex items-center gap-2">
+                                <CheckCircle className="w-4 h-4" />
+                                Pagos este Mês
+                            </p>
+                            <h3 className="text-2xl font-bold text-green-700">
+                                {payments.filter(p => p.paymentStatus === 'paid').length}
+                            </h3>
+                            <p className="text-xs text-green-500 mt-1">
+                                R$ {payments.filter(p => p.paymentStatus === 'paid').reduce((sum, p) => sum + p.amount, 0).toFixed(2)} recebidos
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Pagamentos Atrasados - Alerta Crítico */}
+                    {payments.filter(p => p.paymentStatus === 'overdue').length > 0 && (
+                        <div className="bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-xl p-6 shadow-sm">
+                            <div className="flex items-start gap-4">
+                                <div className="bg-red-100 p-3 rounded-full">
+                                    <AlertTriangle className="w-6 h-6 text-red-600" />
+                                </div>
+                                <div className="flex-1">
+                                    <h3 className="text-lg font-bold text-red-900 mb-2">
+                                        ⚠️ Atenção: {payments.filter(p => p.paymentStatus === 'overdue').length} Pagamento(s) em Atraso
+                                    </h3>
+                                    <p className="text-red-700 text-sm mb-4">
+                                        Total em atraso: <span className="font-bold">
+                                            R$ {payments.filter(p => p.paymentStatus === 'overdue').reduce((sum, p) => sum + p.amount, 0).toFixed(2)}
+                                        </span>. Ação imediata necessária para recuperação.
+                                    </p>
+                                    <div className="flex gap-3">
+                                        <button className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition flex items-center gap-2">
+                                            <AlertTriangle className="w-4 h-4" />
+                                            Enviar Cobrança em Massa
+                                        </button>
+                                        <button className="bg-white text-red-600 border border-red-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-50 transition">
+                                            Exportar Lista
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Tabela de Pagamentos */}
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div className="p-6 border-b border-slate-200 flex flex-col md:flex-row justify-between gap-4">
+                            <div>
+                                <h3 className="font-bold text-slate-900 flex items-center gap-2 text-lg">
+                                    <DollarSign className="w-5 h-5 text-indigo-600" />
+                                    Gestão Completa de Pagamentos
+                                </h3>
+                                <p className="text-sm text-slate-500 mt-1">
+                                    Controle de vencimentos, atrasos e cobranças
+                                </p>
+                            </div>
+                            <div className="flex gap-2">
+                                <div className="relative">
+                                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar locatário..."
+                                        value={searchTerm}
+                                        onChange={e => setSearchTerm(e.target.value)}
+                                        className="pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm w-full md:w-48 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    />
+                                </div>
+                                <button className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition flex items-center gap-2">
+                                    <Download className="w-4 h-4" />
+                                    Exportar
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-slate-50 text-slate-500 font-medium">
+                                    <tr>
+                                        <th className="px-6 py-4">Status</th>
+                                        <th className="px-6 py-4">Locatário</th>
+                                        <th className="px-6 py-4">Veículo</th>
+                                        <th className="px-6 py-4">Valor</th>
+                                        <th className="px-6 py-4">Data Vencimento</th>
+                                        <th className="px-6 py-4">Dias até Vencimento</th>
+                                        <th className="px-6 py-4">Período Aluguel</th>
+                                        <th className="px-6 py-4">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {payments.filter(p => 
+                                        p.renter.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                        p.car.toLowerCase().includes(searchTerm.toLowerCase())
+                                    ).map(payment => {
+                                        const isOverdue = payment.paymentStatus === 'overdue';
+                                        const isDueSoon = payment.daysUntilDue >= 0 && payment.daysUntilDue <= 7 && !isOverdue;
+                                        const isPaid = payment.paymentStatus === 'paid';
+
+                                        return (
+                                            <tr key={payment.id} className={`hover:bg-slate-50 ${isOverdue ? 'bg-red-50' : isDueSoon ? 'bg-yellow-50' : ''}`}>
+                                                <td className="px-6 py-4">
+                                                    {isOverdue && (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                                                                <AlertTriangle className="w-3 h-3" />
+                                                                ATRASADO
+                                                            </span>
+                                                            <span className="text-red-600 font-bold text-xs">
+                                                                {payment.daysOverdue}d
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                    {isDueSoon && !isPaid && (
+                                                        <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                                                            <Clock className="w-3 h-3" />
+                                                            VENCE EM BREVE
+                                                        </span>
+                                                    )}
+                                                    {!isOverdue && !isDueSoon && !isPaid && (
+                                                        <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold">
+                                                            PENDENTE
+                                                        </span>
+                                                    )}
+                                                    {isPaid && (
+                                                        <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                                                            <CheckCircle className="w-3 h-3" />
+                                                            PAGO
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div>
+                                                        <p className="font-medium text-slate-900">{payment.renter}</p>
+                                                        <p className="text-xs text-slate-500">ID: #{payment.id}</p>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-slate-600">{payment.car}</td>
+                                                <td className="px-6 py-4">
+                                                    <span className={`font-bold ${isOverdue ? 'text-red-600' : 'text-slate-900'}`}>
+                                                        R$ {payment.amount.toFixed(2)}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div>
+                                                        <p className={`font-medium ${isOverdue ? 'text-red-600' : 'text-slate-900'}`}>
+                                                            {new Date(payment.dueDate).toLocaleDateString('pt-BR', { 
+                                                                day: '2-digit', 
+                                                                month: 'short', 
+                                                                year: 'numeric' 
+                                                            })}
+                                                        </p>
+                                                        <p className="text-xs text-slate-500">
+                                                            {new Date(payment.dueDate).toLocaleDateString('pt-BR', { weekday: 'long' })}
+                                                        </p>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    {isOverdue ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-red-600 font-bold text-lg">
+                                                                -{payment.daysOverdue}
+                                                            </span>
+                                                            <span className="text-xs text-red-500">dias de atraso</span>
+                                                        </div>
+                                                    ) : isPaid ? (
+                                                        <span className="text-green-600 font-medium">✓ Pago</span>
+                                                    ) : payment.daysUntilDue === 0 ? (
+                                                        <span className="text-yellow-600 font-bold">VENCE HOJE!</span>
+                                                    ) : payment.daysUntilDue > 0 ? (
+                                                        <div>
+                                                            <span className={`font-bold ${isDueSoon ? 'text-yellow-600' : 'text-slate-700'}`}>
+                                                                {payment.daysUntilDue}
+                                                            </span>
+                                                            <span className="text-xs text-slate-500 ml-1">
+                                                                {payment.daysUntilDue === 1 ? 'dia' : 'dias'}
+                                                            </span>
+                                                        </div>
+                                                    ) : null}
+                                                </td>
+                                                <td className="px-6 py-4 text-xs text-slate-500">
+                                                    <div>
+                                                        <p>{new Date(payment.startDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</p>
+                                                        <p className="text-slate-400">até</p>
+                                                        <p>{new Date(payment.endDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</p>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex gap-2">
+                                                        {!isPaid && isOverdue && (
+                                                            <button className="bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-red-700 transition flex items-center gap-1">
+                                                                <AlertTriangle className="w-3 h-3" />
+                                                                Cobrar
+                                                            </button>
+                                                        )}
+                                                        {!isPaid && !isOverdue && (
+                                                            <button className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-indigo-700 transition">
+                                                                Lembrete
+                                                            </button>
+                                                        )}
+                                                        <button className="text-slate-600 hover:text-indigo-600 font-medium text-xs">
+                                                            Detalhes
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Footer com Resumo */}
+                        <div className="bg-slate-50 border-t border-slate-200 p-4 flex flex-wrap justify-between items-center gap-4 text-sm">
+                            <div className="flex gap-6">
+                                <div>
+                                    <span className="text-slate-500">Total de Registros: </span>
+                                    <span className="font-bold text-slate-900">{payments.length}</span>
+                                </div>
+                                <div>
+                                    <span className="text-slate-500">Atrasados: </span>
+                                    <span className="font-bold text-red-600">
+                                        {payments.filter(p => p.paymentStatus === 'overdue').length}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span className="text-slate-500">Pendentes: </span>
+                                    <span className="font-bold text-yellow-600">
+                                        {payments.filter(p => p.paymentStatus !== 'paid' && p.paymentStatus !== 'overdue').length}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="text-slate-500 text-xs">
+                                Atualizado em: {new Date().toLocaleString('pt-BR')}
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
