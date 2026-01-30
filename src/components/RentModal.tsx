@@ -149,7 +149,7 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
     const handlePaymentSuccess = (payment: Payment) => {
         console.log("Contract Signed:", signatureUrl);
         setShowPayment(false);
-        onConfirm(startDate, endDate, totalPrice);
+        onConfirm(startDate, endDate, initialTotal);
     };
 
     // Render Contract Modal
@@ -214,9 +214,18 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
                     onClose={() => { setShowPayment(false); setStep('dates'); }}
                     onSuccess={handlePaymentSuccess}
                     userId={currentUser.id}
-                    amount={totalPrice}
+                    amount={initialTotal}
                     description={`Aluguel ${car.make} ${car.model} - ${days} dias`}
                     receiverId={car.ownerId}
+                    paymentOptions={[
+                        {
+                            id: 'full_initial',
+                            label: 'Pagamento Inicial',
+                            amount: initialTotal,
+                            description: `Aluguel + Caução`,
+                            recommended: true
+                        }
+                    ]}
                 />
             )}
 
