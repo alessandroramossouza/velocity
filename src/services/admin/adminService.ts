@@ -130,7 +130,9 @@ export const getDetailedRentals = async () => {
             paymentStatus: paymentStatus,
             contractSigned: !!r.terms_accepted, // Assuming this column exists from previous step
             daysLate: daysLate,
-            amount: Number(r.total_price) || 0
+            amount: Number(r.total_price) || 0,
+            renterId: r.renter_id,
+            ownerId: r.owner_id
         };
     });
 };

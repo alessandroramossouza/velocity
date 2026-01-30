@@ -34,33 +34,19 @@ export const AdminDashboard: React.FC = () => {
 
     const handleSendReminder = async (payment: any) => {
         try {
-            // Determine user ID (we might need to fetch it or store it in rental data)
-            // Assuming rental object has renterId or similar.
-            // In the loadData mapping: 'renter' is just a name string?
-            // Let's check the mapping. 
-            // The mapping at line 55 says: renter: rental.renter.
-            // If rental.renter is a string, we can't notify by ID.
-            // We need to check getDetailedRentals() implementation or trust that we have an ID somewhere.
-            // Looking at the code, 'rentals' comes from 'getDetailedRentals()'. 
-            // In a real app we need the ID. 
-            // FOR NOW: I'll try to use rental.renterId if available, or just mock success.
+            if (!payment.renterId) {
+                showToast("Erro: ID do locatário não encontrado.", 'error');
+                return;
+            }
 
-            // Assuming the Rental object has renterId. 
-            // If not, we can't send notification.
-            // Let's blindly assume rental.renterId exists or fallback.
+            await createNotification({
+                userId: payment.renterId,
+                type: 'general', // valid type
+                title: 'Lembrete de Pagamento',
+                message: `Olá! Lembramos que o pagamento do aluguel do veículo ${payment.car} vence em ${new Date(payment.dueDate).toLocaleDateString()}. Valor: R$ ${payment.amount.toFixed(2)}.`,
+                link: '/payments'
+            });
 
-            // Create notification
-            /*
-           await createNotification({
-               userId: payment.renterId, 
-               type: 'payment_warning',
-               title: 'Lembrete de Pagamento',
-               message: `Olá! Lembramos que o pagamento do aluguel do veículo ${payment.car} vence em ${new Date(payment.dueDate).toLocaleDateString()}. Valor: R$ ${payment.amount.toFixed(2)}.`,
-               link: '/payments'
-           });
-           */
-
-            // Simulating success for UI demo as requested
             showToast(`Lembrete enviado para ${payment.renter}!`, 'success');
         } catch (e) {
             console.error(e);
@@ -99,6 +85,7 @@ export const AdminDashboard: React.FC = () => {
                     dueDate: rental.endDate,
                     paymentStatus: isOverdue ? 'overdue' : rental.paymentStatus,
                     daysUntilDue: daysUntilDue,
+                    renterId: rental.renterId, // Added renterId for notifications
                     daysOverdue: isOverdue ? Math.abs(daysUntilDue) : 0,
                     startDate: rental.startDate,
                     endDate: rental.endDate
