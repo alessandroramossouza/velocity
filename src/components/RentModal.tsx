@@ -160,7 +160,8 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
         }
     }
 
-    const securityDeposit = car.requiresSecurityDeposit ? (car.securityDepositAmount || 0) : 0;
+    // Caução APENAS para modo Motorista App (uber), NÃO para aluguel avulso/diário
+    const securityDeposit = (mode === 'uber' && car.requiresSecurityDeposit) ? (car.securityDepositAmount || 0) : 0;
     const initialTotal = firstCyclePrice + securityDeposit;
 
     // Valor total do contrato (sem caução, pois caução é devolvida)
@@ -477,8 +478,8 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
                                     <span>R$ {contractTotalValue.toFixed(2)}</span>
                                 </div>
 
-                                {/* Caução */}
-                                {car.requiresSecurityDeposit && (
+                                {/* Caução - APENAS para Motorista App */}
+                                {mode === 'uber' && car.requiresSecurityDeposit && (
                                     <div className="flex justify-between text-amber-700 bg-amber-50 rounded-lg p-2 border border-amber-200">
                                         <span className="flex items-center gap-1 text-xs font-semibold">
                                             <AlertTriangle className="w-3 h-3" /> 
@@ -495,21 +496,29 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
                                     </p>
                                     {mode === 'uber' ? (
                                         <div className="space-y-1">
-                                            <p className="flex items-center gap-1">
-                                                <span className="text-amber-600 font-bold">1º pagamento:</span> R$ {initialTotal.toFixed(2)} (Aluguel + Caução)
-                                            </p>
-                                            <p className="flex items-center gap-1">
-                                                <span className="text-green-600 font-bold">Próximos pagamentos:</span> R$ {firstCyclePrice.toFixed(2)} (sem caução)
-                                            </p>
-                                            <p className="text-[9px] text-blue-600 mt-1 italic">
-                                                ⚠️ Caução cobrada APENAS no 1º pagamento e devolvida no final!
-                                            </p>
+                                            {car.requiresSecurityDeposit ? (
+                                                <>
+                                                    <p className="flex items-center gap-1">
+                                                        <span className="text-amber-600 font-bold">1º pagamento:</span> R$ {initialTotal.toFixed(2)} (Aluguel + Caução)
+                                                    </p>
+                                                    <p className="flex items-center gap-1">
+                                                        <span className="text-green-600 font-bold">Próximos pagamentos:</span> R$ {firstCyclePrice.toFixed(2)} (sem caução)
+                                                    </p>
+                                                    <p className="text-[9px] text-blue-600 mt-1 italic">
+                                                        ⚠️ Caução cobrada APENAS no 1º pagamento e devolvida no final!
+                                                    </p>
+                                                </>
+                                            ) : (
+                                                <p>
+                                                    Pagamento de R$ {firstCyclePrice.toFixed(2)} por {effectivePlan === 'Mensal' ? 'mês' : effectivePlan === 'Semanal' ? 'semana' : 'quinzena'}.
+                                                </p>
+                                            )}
                                         </div>
                                     ) : (
                                         <div className="space-y-1">
-                                            <p>Pagamento único no início do contrato.</p>
-                                            <p className="text-[9px] text-blue-600 italic">
-                                                Caução devolvida no final ({car.requiresSecurityDeposit ? `R$ ${securityDeposit.toFixed(2)}` : 'N/A'}).
+                                            <p className="font-medium">Pagamento único de R$ {contractTotalValue.toFixed(2)} no início.</p>
+                                            <p className="text-[9px] text-green-600 font-semibold mt-1">
+                                                ✅ Aluguel avulso: SEM caução! Você paga apenas pelos dias de uso.
                                             </p>
                                         </div>
                                     )}
@@ -521,12 +530,12 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
                                 <div className="flex justify-between items-end">
                                     <div className="text-left">
                                         <span className="block text-sm font-bold text-slate-900">
-                                            {mode === 'uber' ? '1º Pagamento (Hoje)' : 'Total a Pagar Agora'}
+                                            {mode === 'uber' ? '1º Pagamento (Hoje)' : 'Total a Pagar'}
                                         </span>
                                         <span className="text-[10px] text-slate-500 font-normal">
                                             {mode === 'uber' 
                                                 ? (car.requiresSecurityDeposit ? 'Aluguel + Caução (única vez)' : '1º Ciclo')
-                                                : (car.requiresSecurityDeposit ? 'Valor Total + Caução' : 'Valor Total')
+                                                : `Pagamento único - ${days} ${days === 1 ? 'dia' : 'dias'}`
                                             }
                                         </span>
                                         {mode === 'uber' && car.requiresSecurityDeposit && (
@@ -539,9 +548,14 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
                                         <span className={`text-2xl font-black ${mode === 'uber' ? 'text-purple-600' : 'text-indigo-600'}`}>
                                             R$ {initialTotal.toFixed(2)}
                                         </span>
-                                        {car.requiresSecurityDeposit && (
+                                        {mode === 'uber' && car.requiresSecurityDeposit && securityDeposit > 0 && (
                                             <p className="text-[9px] text-slate-500 mt-0.5">
                                                 (R$ {firstCyclePrice.toFixed(2)} + R$ {securityDeposit.toFixed(2)} caução)
+                                            </p>
+                                        )}
+                                        {mode === 'daily' && (
+                                            <p className="text-[9px] text-green-600 font-semibold mt-0.5">
+                                                ✅ Sem caução
                                             </p>
                                         )}
                                     </div>
