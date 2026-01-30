@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Car, ChatMessage, User, Rental } from '../types';
 import { getCarRecommendations } from '../services/geminiService';
-import { addFavorite, removeFavorite, getFavorites, createRentalProposal, getRenterProposals } from '../services/api';
+import { addFavorite, removeFavorite, getFavorites, createRentalProposal, getRenterProposals, createNotification } from '../services/api';
 import {
   Search, MessageCircle, Send, Loader2, Heart, Star, Share2, Copy, Check,
   ArrowUpDown, Filter, X, Car as CarIcon, Sparkles, Eye, Calendar, Fuel, Gauge, MapPin, Shield, Info,
@@ -173,6 +173,30 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars, curr
 
     try {
       await createRentalProposal(String(selectedCar.id), currentUser.id, selectedCar.ownerId, startDate, endDateStr, offerPrice, 'uber');
+
+      // Notify Owner
+      await createNotification({
+        userId: selectedCar.ownerId, // Dono do carro
+        type: 'rental_request', // Tipo que gera alerta no dashboard dele
+        title: 'Nova Proposta Recebida',
+        message: `Você recebeu uma proposta de aluguel para o ${selectedCar.make} ${selectedCar.model}. Valor: R$ ${offerPrice}`,
+        link: '/owner-dashboard'
+      });
+
+      // Notify Renter (Confirmation)
+      await createNotification({
+        userId: currentUser.id,
+        type: 'general', // Confirmação local com som
+        title: 'Proposta Enviada!',
+        message: `Sua proposta para o ${selectedCar.make} ${selectedCar.model} foi enviada com sucesso.`,
+        link: '/rentals'
+      });
+
+      // Refresh proposals list
+      const data = await getRenterProposals(currentUser.id);
+      const active = data.filter((p: Rental) => ['proposal_submitted', 'contract_pending_signature', 'contract_signed', 'payment_pending', 'active'].includes(p.status));
+      setActiveProposals(active);
+
     } catch (error) {
       console.error('Error sending proposal', error);
     }

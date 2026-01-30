@@ -76,7 +76,7 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
     const days = calculateDays();
     const { total: totalPrice, dailyRate: effectiveDailyRate, plan } = calculateBestPrice(days);
 
-    const handleAction = () => {
+    const handleAction = async () => {
         if (days <= 0 && mode === 'daily') {
             alert('Selecione um período válido.');
             return;
@@ -93,6 +93,17 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
             if (onSendProposal) {
                 onSendProposal(startDate, uberMonths, totalPrice);
                 setStep('proposal_success');
+
+                // --- NEW: Notify Owner ---
+                // We assume `onSendProposal` handles the API call for proposal creation, 
+                // but we also want to send the notification here or ensuring `onSendProposal` does it.
+                // However, `onSendProposal` implementation is in `RenterMarketplace` (parent).
+                // It is safer to send the notification THERE to have access to the created rental/proposal ID.
+                // But if we want it HERE for immediate feedback/demo or if `onSendProposal` is simple wrapper:
+                // Actually, `onSendProposal` (from RenterMarketplace line 226) calls `createRentalProposal`.
+                // Let's rely on RenterMarketplace to send the notification after proposal is created.
+                // Wait, User asked to fix it. RenterMarketplace is where the logic resides.
+                // I should assume the fix needs to be applied in RenterMarketplace.tsx where `handleSendProposal` is defined.
             } else {
                 // Fallback demo local
                 setStep('proposal_success');
