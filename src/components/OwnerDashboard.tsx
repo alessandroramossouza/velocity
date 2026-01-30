@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Car, User, Rental, Partner, ServiceRequest } from '../types';
 import { analyzeCarListing } from '../services/geminiService';
-import { getActiveRentals, completeRental, getOwnerRentalHistory, getPartners, createServiceRequest, getOwnerServiceRequests, getRentalProposals, approveRentalProposal, rejectRentalProposal, uploadProposalContract, requestProposalPayment } from '../services/api';
+import { getActiveRentals, completeRental, getOwnerRentalHistory, getPartners, createServiceRequest, getOwnerServiceRequests, getRentalProposals, approveRentalProposal, rejectRentalProposal, uploadProposalContract, requestProposalPayment, createNotification } from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import {
   Sparkles, Plus, Car as CarIcon, DollarSign, Loader2, Upload, Pencil, RotateCcw,
@@ -190,6 +190,16 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
       if (action === 'approve') await approveRentalProposal(rentalId);
       else await rejectRentalProposal(rentalId);
 
+      await createNotification({
+        userId: proposals.find(p => p.id === rentalId)?.renterId || '',
+        type: action === 'approve' ? 'rental_approved' : 'rental_rejected',
+        title: action === 'approve' ? 'Proposta Aprovada!' : 'Proposta Rejeitada',
+        message: action === 'approve'
+          ? `Sua proposta foi aprovada! O contrato foi enviado.`
+          : `Sua proposta de aluguel foi rejeitada pelo proprietário.`,
+        link: '/my-rentals'
+      });
+
       showToast(action === 'approve' ? 'Proposta Aprovada!' : 'Proposta Rejeitada', 'success');
       loadProposals();
       loadActiveRentals();
@@ -217,6 +227,18 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
         .getPublicUrl(fileName);
 
       await uploadProposalContract(rentalId, publicUrl);
+
+      const rental = proposals.find(p => p.id === rentalId);
+      if (rental && rental.renterId) {
+        await createNotification({
+          userId: rental.renterId,
+          type: 'general',
+          title: 'Contrato Disponível',
+          message: 'O contrato para sua locação foi enviado. Por favor, assine digitalmente.',
+          link: '/my-rentals'
+        });
+      }
+
       showToast('Contrato enviado com sucesso!', 'success');
       loadProposals();
     } catch (error) {
@@ -228,6 +250,18 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
   const handleRequestPayment = async (rentalId: string) => {
     try {
       await requestProposalPayment(rentalId);
+
+      const rental = proposals.find(p => p.id === rentalId);
+      if (rental && rental.renterId) {
+        await createNotification({
+          userId: rental.renterId,
+          type: 'general', // Triggers sound
+          title: 'Pagamento Solicitado',
+          message: 'O contrato foi validado e o pagamento liberado. Realize o pagamento para iniciar o aluguel.',
+          link: '/my-rentals'
+        });
+      }
+
       showToast('Solicitação de pagamento enviada!', 'success');
       loadProposals();
     } catch (e) {
