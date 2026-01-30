@@ -7,6 +7,7 @@ import {
     addSignatureToPdf,
     saveSignedContract
 } from '../services/contractService';
+import { createNotification } from '../services/api';
 import {
     FileText,
     PenTool,
@@ -125,6 +126,24 @@ export const ContractSignatureModal: React.FC<ContractSignatureModalProps> = ({
             if (!savedContract) {
                 throw new Error('Falha ao salvar contrato assinado');
             }
+
+            // Notificar Locador (Owner)
+            await createNotification({
+                userId: car.ownerId,
+                type: 'general',
+                title: 'Contrato Assinado',
+                message: `O contrato do veículo ${car.make} ${car.model} foi assinado por ${user.name}.`,
+                link: '/owner-dashboard'
+            });
+
+            // Notificar Locatário (Renter) - Gera som no App.tsx via Realtime
+            await createNotification({
+                userId: user.id,
+                type: 'general',
+                title: 'Contrato Assinado!',
+                message: `Você assinou com sucesso o contrato do ${car.make} ${car.model}. Aguarde a liberação do pagamento.`,
+                link: '/rentals'
+            });
 
             setStep('done');
 
