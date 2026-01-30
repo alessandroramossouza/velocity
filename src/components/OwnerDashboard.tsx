@@ -471,10 +471,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
 
     if (editingCar) {
       onUpdateCar({ ...editingCar, ...commonData });
-      showToast("Veículo atualizado!", 'success');
     } else {
       onAddCar({ ownerId: user.id, isAvailable: true, ...commonData });
-      showToast("Veículo cadastrado!", 'success');
     }
 
     handleCancel();

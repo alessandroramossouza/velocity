@@ -57,7 +57,7 @@ export const createCar = async (car: Omit<Car, 'id'>): Promise<Car> => {
         contract_pdf_url: car.contractPdfUrl
     };
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
         .from('cars')
         .insert(dbPayload)
         .select(`
@@ -80,6 +80,47 @@ export const createCar = async (car: Omit<Car, 'id'>): Promise<Car> => {
             contractPdfUrl:contract_pdf_url
         `)
         .single();
+
+    // FALLBACK: Se o banco de dados ainda não tiver as colunas novas, tenta salvar sem elas
+    if (error && error.code === '42703') { // 42703 = Undefined Column
+        console.warn('⚠️ Schema mismatch detected. Retrying without new fields (price_per_15_days, etc). Please run UPDATE_CARS_SCHEMA.sql');
+        const {
+            price_per_15_days,
+            requires_security_deposit,
+            security_deposit_amount,
+            contract_pdf_url, // check if this needs to be excluded too, usually yes if old schema
+            ...legacyPayload
+        } = dbPayload;
+
+        const retry = await supabase
+            .from('cars')
+            .insert(legacyPayload)
+            .select(`
+                id,
+                ownerId:owner_id,
+                make,
+                model,
+                year,
+                category,
+                pricePerDay:price_per_day,
+                pricePerWeek:price_per_week,
+                pricePerMonth:price_per_month,
+                description,
+                imageUrl:image_url,
+                features,
+                isAvailable:is_available
+            `) // Select only legacy fields to avoid error on return
+            .single();
+
+        data = {
+            ...retry.data,
+            pricePer15Days: undefined,
+            requiresSecurityDeposit: undefined,
+            securityDepositAmount: undefined,
+            contractPdfUrl: undefined
+        };
+        error = retry.error;
+    }
 
     if (error) {
         console.error('Error creating car:', error);
@@ -108,7 +149,7 @@ export const updateCar = async (car: Car): Promise<Car> => {
         contract_pdf_url: car.contractPdfUrl
     };
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
         .from('cars')
         .update(dbPayload)
         .eq('id', car.id)
@@ -132,6 +173,48 @@ export const updateCar = async (car: Car): Promise<Car> => {
             contractPdfUrl:contract_pdf_url
         `)
         .single();
+
+    // FALLBACK: Se o banco de dados ainda não tiver as colunas novas, tenta salvar sem elas
+    if (error && error.code === '42703') {
+        console.warn('⚠️ Schema mismatch detected on update. Retrying without new fields.');
+        const {
+            price_per_15_days,
+            requires_security_deposit,
+            security_deposit_amount,
+            contract_pdf_url,
+            ...legacyPayload
+        } = dbPayload;
+
+        const retry = await supabase
+            .from('cars')
+            .update(legacyPayload)
+            .eq('id', car.id)
+            .select(`
+                id,
+                ownerId:owner_id,
+                make,
+                model,
+                year,
+                category,
+                pricePerDay:price_per_day,
+                pricePerWeek:price_per_week,
+                pricePerMonth:price_per_month,
+                description,
+                imageUrl:image_url,
+                features,
+                isAvailable:is_available
+            `)
+            .single();
+
+        data = {
+            ...retry.data,
+            pricePer15Days: undefined,
+            requiresSecurityDeposit: undefined,
+            securityDepositAmount: undefined,
+            contractPdfUrl: undefined
+        };
+        error = retry.error;
+    }
 
     if (error) {
         console.error('Error updating car:', error);
