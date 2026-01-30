@@ -96,11 +96,11 @@ function AppContent() {
               prev.map(n =>
                 n.id === payload.new.id
                   ? {
-                      ...n,
-                      isRead: payload.new.is_read,
-                      title: payload.new.title,
-                      message: payload.new.message
-                    }
+                    ...n,
+                    isRead: payload.new.is_read,
+                    title: payload.new.title,
+                    message: payload.new.message
+                  }
                   : n
               )
             );
@@ -262,11 +262,32 @@ function AppContent() {
     const currentUnread = notifications.filter(n => !n.isRead).length;
     const currentTotal = notifications.length;
 
-    if (currentTotal > prevNotificationsLengthRef.current && prevNotificationsLengthRef.current > 0) {
-      // New notification arrived!
-      playNotificationSound();
-      showToast(`Nova notificação recebida!`, 'info');
-      setRefreshTrigger(prev => prev + 1); // FORCE DATA REFRESH ON DASHBOARDS
+    // Trigger if we have MORE notifications than before (new arrival)
+    // We removed 'prev > 0' check so it also triggers if you had 0 and now have 1.
+    // However, on very first load/mount, prev is 0 and current might be N.
+    // Ideally we want to avoid sound on initial page load.
+    // But since 'fetchNotifications' runs on mount and sets state, this effect runs.
+
+    // To solve Initial Load Sound:
+    // We can use a 'isFirstLoad' ref or simply accept that if you engage refresh, it might ding.
+    // Better: Only trigger if the difference is exactly 1 (realtime push) OR strictly greater.
+    // The previous logic was: IF total > prev AND prev > 0.
+    // The user wants sound. Let's make it robust:
+    // If we receive a realtime update, 'notifications' grows by 1.
+
+    if (currentTotal > prevNotificationsLengthRef.current) {
+      // Avoid sound on initial load if we go from 0 to N immediately?
+      // Actually, initial fetch usually happens fast. 
+      // Let's add a small guard: Only ignore if it jumped from 0 to many (initial fetch).
+      // Realtime usually adds 1 by 1.
+
+      const isInitialFetch = (prevNotificationsLengthRef.current === 0 && currentTotal > 1);
+
+      if (!isInitialFetch) {
+        playNotificationSound();
+        showToast(`Nova notificação recebida!`, 'info');
+        setRefreshTrigger(prev => prev + 1); // FORCE DATA REFRESH ON DASHBOARDS
+      }
     }
 
     prevNotificationsLengthRef.current = currentTotal;
