@@ -15,6 +15,8 @@ export interface Car {
   isAvailable: boolean;
   averageRating?: number;
   contractPdfUrl?: string; // URL do contrato PDF customizado pelo locador
+  requiresSecurityDeposit?: boolean;
+  securityDepositAmount?: number;
 }
 
 export interface SignedContract {

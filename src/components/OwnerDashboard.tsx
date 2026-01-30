@@ -137,6 +137,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
   const [priceMonth, setPriceMonth] = useState<number | undefined>();
   const [description, setDescription] = useState('');
   const [features, setFeatures] = useState<string[]>([]);
+  const [requiresSecurityDeposit, setRequiresSecurityDeposit] = useState(false);
+  const [securityDepositAmount, setSecurityDepositAmount] = useState<number>(0);
 
   // Image Upload State
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -348,6 +350,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
     setPriceMonth(car.pricePerMonth);
     setDescription(car.description);
     setFeatures(car.features);
+    setRequiresSecurityDeposit(car.requiresSecurityDeposit || false);
+    setSecurityDepositAmount(car.securityDepositAmount || 0);
     setIsAdding(true);
     setImageFile(null);
     setContractFile(null);
@@ -363,6 +367,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
 
   const resetForm = () => {
     setMake(''); setModel(''); setDescription(''); setPrice(0); setImageFile(null); setFeatures([]);
+    setPriceWeek(undefined); setPriceMonth(undefined);
+    setRequiresSecurityDeposit(false); setSecurityDepositAmount(0);
     setContractFile(null); setExistingContractUrl(null);
   };
 
@@ -454,6 +460,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
       pricePerDay: price,
       pricePerWeek: priceWeek,
       pricePerMonth: priceMonth,
+      requiresSecurityDeposit,
+      securityDepositAmount: requiresSecurityDeposit ? securityDepositAmount : 0,
       description, imageUrl: finalImageUrl, features,
       contractPdfUrl: finalContractUrl,
     };
@@ -608,14 +616,59 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
                 <input type="number" value={price} onChange={e => setPrice(Number(e.target.value))} className="w-full p-2 border rounded-md font-bold text-green-700" required />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Semana (R$)</label>
-                <input type="number" value={priceWeek || ''} onChange={e => setPriceWeek(Number(e.target.value))} className="w-full p-2 border rounded-md text-sm" placeholder="Opcional" />
+                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Semana (R$)</label>
+                  <input
+                    type="number"
+                    value={priceWeek || ''}
+                    onChange={e => setPriceWeek(Number(e.target.value))}
+                    className="w-full p-2 border rounded-md text-sm cursor-text bg-white"
+                    placeholder="Defina o valor semanal"
+                  />
+                </div>
+                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Mês (R$)</label>
+                  <input
+                    type="number"
+                    value={priceMonth || ''}
+                    onChange={e => setPriceMonth(Number(e.target.value))}
+                    className="w-full p-2 border rounded-md text-sm cursor-text bg-white"
+                    placeholder="Defina o valor mensal"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Mês (R$)</label>
-                <input type="number" value={priceMonth || ''} onChange={e => setPriceMonth(Number(e.target.value))} className="w-full p-2 border rounded-md text-sm" placeholder="Opcional" />
+
+              {/* Security Deposit Section */}
+              <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 text-sm font-bold text-amber-900 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={requiresSecurityDeposit}
+                      onChange={e => setRequiresSecurityDeposit(e.target.checked)}
+                      className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
+                    />
+                    Exigir Caução (Garantia)
+                  </label>
+                  <Shield className="w-5 h-5 text-amber-500" />
+                </div>
+
+                {requiresSecurityDeposit && (
+                  <div className="animate-fade-in">
+                    <label className="block text-xs font-medium text-amber-800 mb-1">Valor da Caução (R$)</label>
+                    <input
+                      type="number"
+                      value={securityDepositAmount}
+                      onChange={e => setSecurityDepositAmount(Number(e.target.value))}
+                      className="w-full p-2 border border-amber-300 rounded-md focus:ring-2 focus:ring-amber-500 bg-white"
+                      placeholder="Ex: 1500.00"
+                    />
+                    <p className="text-[10px] text-amber-700 mt-1">Este valor será retido como garantia e devolvido ao final do contrato.</p>
+                  </div>
+                )}
               </div>
             </div>
+
           </div>
 
           <div>
@@ -626,8 +679,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
           <button type="submit" disabled={uploading} className="w-full bg-slate-900 text-white py-3 rounded-lg hover:bg-slate-800 transition font-semibold disabled:opacity-50 flex justify-center">
             {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : (editingCar ? 'Salvar Alterações' : 'Cadastrar Veículo')}
           </button>
-        </form>
-      </div>
+        </form >
+      </div >
     );
   }
 

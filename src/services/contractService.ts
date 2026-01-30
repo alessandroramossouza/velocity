@@ -150,7 +150,14 @@ export async function generateFilledContract(
         coverPage.drawText(`Data de Devolução: ${new Date(rental.endDate).toLocaleDateString('pt-BR')}`, { x: 50, y, size: 10, font });
         y -= 15;
         coverPage.drawText(`Total Estimado: R$ ${rental.totalPrice.toFixed(2)}`, { x: 50, y, size: 12, font: boldFont, color: rgb(0, 0.6, 0) });
-        y -= 40;
+        y -= 20;
+
+        if (car.requiresSecurityDeposit && car.securityDepositAmount) {
+            coverPage.drawText(`Caução (Garantia): R$ ${car.securityDepositAmount.toFixed(2)}`, { x: 50, y, size: 11, font: boldFont, color: rgb(0.8, 0.4, 0) });
+            y -= 30;
+        } else {
+            y -= 10;
+        }
 
         // 5. Declaração
         const declaration = 'Declaro que li e concordo com todos os termos do contrato anexo a seguir, bem como confirmo a veracidade dos dados acima prestados.';
@@ -537,8 +544,12 @@ export async function generateDefaultContract(
 
     // Cláusula 3
     writeText('CLÁUSULA 3ª – DO VALOR DA CAUÇÃO (GARANTIA)', 11, true);
-    writeText('§ 1°. O LOCATÁRIO deverá entregar ao LOCADOR a título de caução (garantia) o valor estipulado pelo Locador (caso aplicável), destinado a cobrir eventuais despesas, danos ou multas.', 10);
-    writeText('§ 4°. Ao término do contrato e após a vistoria de devolução, não havendo débitos, o valor da caução será restituído.', 10);
+    if (car.requiresSecurityDeposit && car.securityDepositAmount) {
+        writeText(`§ 1°. O LOCATÁRIO entregará ao LOCADOR a título de caução (garantia) a importância de R$ ${car.securityDepositAmount.toFixed(2)}, destinada a cobrir eventuais despesas, danos, multas ou inadimplência.`, 10);
+    } else {
+        writeText('§ 1°. Não haverá cobrança de caução (garantia) para esta locação, salvo repactuação expressa entre as partes.', 10);
+    }
+    writeText('§ 4°. Ao término do contrato e após a vistoria de devolução, não havendo débitos ou avarias, o valor da caução (se houver) será restituído integralmente.', 10);
     addSpace(10);
 
     // Cláusula 4
