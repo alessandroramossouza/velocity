@@ -85,7 +85,16 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
     };
 
     const days = calculateDays();
-    const { total: totalPrice, dailyRate: effectiveDailyRate, plan } = calculateBestPrice(days);
+    const { total: rentalPrice, dailyRate: effectiveDailyRate, plan } = calculateBestPrice(days);
+
+    const securityDeposit = car.requiresSecurityDeposit ? (car.securityDepositAmount || 0) : 0;
+    const initialTotal = rentalPrice + securityDeposit;
+
+    // We keep 'totalPrice' variable name if used downstream, but for clarity let's use 'rentalPrice' for rent
+    // and pass 'rentalPrice' to functions, but show 'initialTotal' to user.
+    // However, logic below uses 'totalPrice'. Let's alias it back for minimal refactor, 
+    // or just use 'rentalPrice' and update refs.
+    const totalPrice = rentalPrice;
 
     const handleAction = async () => {
         if (days <= 0 && mode === 'daily') {
@@ -364,53 +373,66 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
                                     <span>Duração</span>
                                     <span>{days} dias</span>
                                 </div>
-                                <div className="border-t border-slate-200/50 pt-2 flex justify-between font-bold text-lg mt-2">
-                                    <span className="text-slate-900">Total Estimado</span>
-                                    <span className={mode === 'uber' ? 'text-purple-600' : 'text-indigo-600'}>
-                                        R$ {totalPrice.toFixed(2)}
-                                    </span>
+                                <div className="flex justify-between text-slate-800 pt-1 font-medium">
+                                    <span>Valor do Aluguel</span>
+                                    <span>R$ {totalPrice.toFixed(2)}</span>
                                 </div>
                                 {car.requiresSecurityDeposit && (
-                                    <div className="pt-2 text-xs text-amber-700 flex items-center gap-1 justify-end">
-                                        <AlertTriangle className="w-3 h-3" />
-                                        + Caução de R$ {car.securityDepositAmount?.toFixed(2)} (Reembolsável)
+                                    <div className="flex justify-between text-amber-700">
+                                        <span className="flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Caução (Única)</span>
+                                        <span>R$ {car.securityDepositAmount?.toFixed(2)}</span>
                                     </div>
                                 )}
                             </div>
-                        </div>
 
-                        {/* Action Buttons */}
-                        <div className="flex gap-3 pt-2">
-                            <button
-                                onClick={onClose}
-                                className="flex-1 py-3 border border-slate-300 rounded-xl font-medium hover:bg-slate-50 transition text-slate-700"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={handleAction}
-                                disabled={days <= 0}
-                                className={`flex-[2] py-3 rounded-xl font-bold text-white transition flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg ${mode === 'uber'
-                                    ? 'bg-purple-600 hover:bg-purple-700 shadow-purple-200'
-                                    : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'
-                                    }`}
-                            >
-                                {mode === 'uber' ? (
-                                    <>
-                                        <span>Enviar Proposta</span>
-                                        <ArrowRight className="w-4 h-4" />
-                                    </>
-                                ) : (
-                                    <>
-                                        <span>Continuar para Contrato</span>
-                                        <ArrowRight className="w-4 h-4" />
-                                    </>
-                                )}
-                            </button>
+                            <div className="border-t-2 border-slate-200 pt-3 mt-2">
+                                <div className="flex justify-between items-end">
+                                    <span className="text-sm font-bold text-slate-900">Total a Pagar (Retirada)</span>
+                                    <div className="text-right">
+                                        <span className={`text-xl font-black ${mode === 'uber' ? 'text-purple-600' : 'text-indigo-600'}`}>
+                                            R$ {initialTotal.toFixed(2)}
+                                        </span>
+                                        {car.requiresSecurityDeposit && (
+                                            <p className="text-[10px] text-slate-400 font-normal">Aluguel + Caução Reembolsável</p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-3 pt-2">
+                        <button
+                            onClick={onClose}
+                            className="flex-1 py-3 border border-slate-300 rounded-xl font-medium hover:bg-slate-50 transition text-slate-700"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            onClick={handleAction}
+                            disabled={days <= 0}
+                            className={`flex-[2] py-3 rounded-xl font-bold text-white transition flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg ${mode === 'uber'
+                                ? 'bg-purple-600 hover:bg-purple-700 shadow-purple-200'
+                                : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'
+                                }`}
+                        >
+                            {mode === 'uber' ? (
+                                <>
+                                    <span>Enviar Proposta</span>
+                                    <ArrowRight className="w-4 h-4" />
+                                </>
+                            ) : (
+                                <>
+                                    <span>Continuar para Contrato</span>
+                                    <ArrowRight className="w-4 h-4" />
+                                </>
+                            )}
+                        </button>
                     </div>
                 </div>
             </div>
         </>
     );
 };
+
