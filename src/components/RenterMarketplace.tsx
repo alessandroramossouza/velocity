@@ -497,8 +497,24 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars, curr
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-slate-400">a partir de</p>
-                    <p className="text-lg font-bold text-indigo-600">R$ {car.pricePerDay}</p>
-                    <p className="text-xs text-slate-400">/dia</p>
+                    {car.pricePerDay > 0 ? (
+                      <>
+                        <p className="text-lg font-bold text-indigo-600">R$ {car.pricePerDay}</p>
+                        <p className="text-xs text-slate-400">/dia</p>
+                      </>
+                    ) : car.pricePerWeek && car.pricePerWeek > 0 ? (
+                      <>
+                        <p className="text-lg font-bold text-violet-600">R$ {car.pricePerWeek}</p>
+                        <p className="text-xs text-slate-400">/semana</p>
+                      </>
+                    ) : car.pricePerMonth && car.pricePerMonth > 0 ? (
+                      <>
+                        <p className="text-lg font-bold text-purple-600">R$ {car.pricePerMonth}</p>
+                        <p className="text-xs text-slate-400">/mês</p>
+                      </>
+                    ) : (
+                      <p className="text-lg font-bold text-slate-400">Sob Consulta</p>
+                    )}
                   </div>
                 </div>
 

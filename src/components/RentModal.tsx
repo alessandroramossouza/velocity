@@ -59,6 +59,13 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
         let plan = 'Diária';
         let total = days * dailyRate;
 
+        // Fallback: Se diária for 0, mas tiver preço semanal, usa pro-rata base
+        if (dailyRate === 0 && car.pricePerWeek && car.pricePerWeek > 0) {
+            dailyRate = car.pricePerWeek / 7;
+            // Não mudamos o nome do plano ainda, pois pode cair na regra de "Semanal" oficial abaixo se days >= 7
+            total = dailyRate * days;
+        }
+
         // Lógica de preço progressivo
         if (days >= 30 && car.pricePerMonth) {
             dailyRate = car.pricePerMonth / 30; // Preço dia efetivo no plano mensal
@@ -83,6 +90,11 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
     const handleAction = async () => {
         if (days <= 0 && mode === 'daily') {
             alert('Selecione um período válido.');
+            return;
+        }
+
+        if (totalPrice === 0 && mode === 'daily') {
+            alert('Este veículo não possui preço definido para este período (dias insuficientes para tarifa semanal/mensal).');
             return;
         }
 
