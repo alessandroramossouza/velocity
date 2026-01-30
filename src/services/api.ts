@@ -1152,5 +1152,8 @@ export const createNotification = async (notification: Omit<Notification, 'id' |
             is_read: false
         });
 
-    if (error) console.error('Error creating notification:', error);
+    if (error) {
+        console.error('Error creating notification:', error);
+        throw error;
+    }
 };
