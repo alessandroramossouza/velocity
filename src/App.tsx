@@ -163,7 +163,10 @@ function AppContent() {
               imageUrl: payload.new.image_url,
               features: payload.new.features,
               isAvailable: payload.new.is_available,
-              contractPdfUrl: payload.new.contract_pdf_url
+              contractPdfUrl: payload.new.contract_pdf_url,
+              pricePer15Days: payload.new.price_per_15_days,
+              requiresSecurityDeposit: payload.new.requires_security_deposit,
+              securityDepositAmount: payload.new.security_deposit_amount
             };
             setAllCars(prev => [...prev, newCar]);
 
@@ -183,7 +186,10 @@ function AppContent() {
               imageUrl: payload.new.image_url,
               features: payload.new.features,
               isAvailable: payload.new.is_available,
-              contractPdfUrl: payload.new.contract_pdf_url
+              contractPdfUrl: payload.new.contract_pdf_url,
+              pricePer15Days: payload.new.price_per_15_days,
+              requiresSecurityDeposit: payload.new.requires_security_deposit,
+              securityDepositAmount: payload.new.security_deposit_amount
             };
             setAllCars(prev => prev.map(c => c.id === updatedCar.id ? updatedCar : c));
 

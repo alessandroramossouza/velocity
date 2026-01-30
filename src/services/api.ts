@@ -22,6 +22,10 @@ export const getCars = async (): Promise<Car[]> => {
             imageUrl:image_url,
             features,
             isAvailable:is_available,
+            pricePer15Days:price_per_15_days,
+            requiresSecurityDeposit:requires_security_deposit,
+            securityDepositAmount:security_deposit_amount,
+            contractPdfUrl:contract_pdf_url,
             created_at
         `);
 
@@ -46,7 +50,11 @@ export const createCar = async (car: Omit<Car, 'id'>): Promise<Car> => {
         description: car.description,
         image_url: car.imageUrl,
         features: car.features,
-        is_available: car.isAvailable
+        is_available: car.isAvailable,
+        price_per_15_days: car.pricePer15Days,
+        requires_security_deposit: car.requiresSecurityDeposit,
+        security_deposit_amount: car.securityDepositAmount,
+        contract_pdf_url: car.contractPdfUrl
     };
 
     const { data, error } = await supabase
@@ -65,7 +73,11 @@ export const createCar = async (car: Omit<Car, 'id'>): Promise<Car> => {
             description,
             imageUrl:image_url,
             features,
-            isAvailable:is_available
+            isAvailable:is_available,
+            pricePer15Days:price_per_15_days,
+            requiresSecurityDeposit:requires_security_deposit,
+            securityDepositAmount:security_deposit_amount,
+            contractPdfUrl:contract_pdf_url
         `)
         .single();
 
@@ -89,7 +101,11 @@ export const updateCar = async (car: Car): Promise<Car> => {
         description: car.description,
         image_url: car.imageUrl,
         features: car.features,
-        is_available: car.isAvailable
+        is_available: car.isAvailable,
+        price_per_15_days: car.pricePer15Days,
+        requires_security_deposit: car.requiresSecurityDeposit,
+        security_deposit_amount: car.securityDepositAmount,
+        contract_pdf_url: car.contractPdfUrl
     };
 
     const { data, error } = await supabase
@@ -109,7 +125,11 @@ export const updateCar = async (car: Car): Promise<Car> => {
             description,
             imageUrl:image_url,
             features,
-            isAvailable:is_available
+            isAvailable:is_available,
+            pricePer15Days:price_per_15_days,
+            requiresSecurityDeposit:requires_security_deposit,
+            securityDepositAmount:security_deposit_amount,
+            contractPdfUrl:contract_pdf_url
         `)
         .single();
 
