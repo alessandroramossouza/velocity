@@ -18,6 +18,7 @@ export interface Car {
   contractPdfUrl?: string; // URL do contrato PDF customizado pelo locador
   requiresSecurityDeposit?: boolean;
   securityDepositAmount?: number;
+  paymentFrequency?: 'weekly' | 'biweekly' | 'monthly'; // Frequência preferida de pagamento (Motorista App)
 }
 
 export interface SignedContract {

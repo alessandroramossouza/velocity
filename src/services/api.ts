@@ -26,6 +26,7 @@ export const getCars = async (): Promise<Car[]> => {
             requiresSecurityDeposit:requires_security_deposit,
             securityDepositAmount:security_deposit_amount,
             contractPdfUrl:contract_pdf_url,
+            paymentFrequency:payment_frequency,
             created_at
         `);
 
@@ -52,9 +53,9 @@ export const createCar = async (car: Omit<Car, 'id'>): Promise<Car> => {
         features: car.features,
         is_available: car.isAvailable,
         price_per_15_days: car.pricePer15Days,
-        requires_security_deposit: car.requiresSecurityDeposit,
         security_deposit_amount: car.securityDepositAmount,
-        contract_pdf_url: car.contractPdfUrl
+        contract_pdf_url: car.contractPdfUrl,
+        payment_frequency: car.paymentFrequency
     };
 
     let { data, error } = await supabase
@@ -77,7 +78,10 @@ export const createCar = async (car: Omit<Car, 'id'>): Promise<Car> => {
             pricePer15Days:price_per_15_days,
             requiresSecurityDeposit:requires_security_deposit,
             securityDepositAmount:security_deposit_amount,
-            contractPdfUrl:contract_pdf_url
+            requiresSecurityDeposit:requires_security_deposit,
+            securityDepositAmount:security_deposit_amount,
+            contractPdfUrl:contract_pdf_url,
+            paymentFrequency:payment_frequency
         `)
         .single();
 
@@ -89,8 +93,9 @@ export const createCar = async (car: Omit<Car, 'id'>): Promise<Car> => {
             requires_security_deposit,
             security_deposit_amount,
             contract_pdf_url, // check if this needs to be excluded too, usually yes if old schema
+            payment_frequency,
             ...legacyPayload
-        } = dbPayload;
+        } = dbPayload as any; // Cast to any to avoid strict type checks on dynamic properties for now
 
         const retry = await supabase
             .from('cars')
@@ -117,7 +122,8 @@ export const createCar = async (car: Omit<Car, 'id'>): Promise<Car> => {
             pricePer15Days: undefined,
             requiresSecurityDeposit: undefined,
             securityDepositAmount: undefined,
-            contractPdfUrl: undefined
+            contractPdfUrl: undefined,
+            paymentFrequency: undefined
         };
         error = retry.error;
     }
@@ -146,7 +152,8 @@ export const updateCar = async (car: Car): Promise<Car> => {
         price_per_15_days: car.pricePer15Days,
         requires_security_deposit: car.requiresSecurityDeposit,
         security_deposit_amount: car.securityDepositAmount,
-        contract_pdf_url: car.contractPdfUrl
+        contract_pdf_url: car.contractPdfUrl,
+        payment_frequency: car.paymentFrequency
     };
 
     let { data, error } = await supabase
@@ -170,7 +177,8 @@ export const updateCar = async (car: Car): Promise<Car> => {
             pricePer15Days:price_per_15_days,
             requiresSecurityDeposit:requires_security_deposit,
             securityDepositAmount:security_deposit_amount,
-            contractPdfUrl:contract_pdf_url
+            contractPdfUrl:contract_pdf_url,
+            paymentFrequency:payment_frequency
         `)
         .single();
 
@@ -182,8 +190,9 @@ export const updateCar = async (car: Car): Promise<Car> => {
             requires_security_deposit,
             security_deposit_amount,
             contract_pdf_url,
+            payment_frequency, // Add this
             ...legacyPayload
-        } = dbPayload;
+        } = dbPayload as any;
 
         const retry = await supabase
             .from('cars')
@@ -211,7 +220,8 @@ export const updateCar = async (car: Car): Promise<Car> => {
             pricePer15Days: undefined,
             requiresSecurityDeposit: undefined,
             securityDepositAmount: undefined,
-            contractPdfUrl: undefined
+            contractPdfUrl: undefined,
+            paymentFrequency: undefined
         };
         error = retry.error;
     }
@@ -246,7 +256,8 @@ export const createRental = async (
     ownerId: string,
     startDate: string,
     endDate: string,
-    totalPrice: number
+    totalPrice: number,
+    initialPaymentId?: string
 ): Promise<Rental> => {
     const { data, error } = await supabase
         .from('rentals')
@@ -269,6 +280,14 @@ export const createRental = async (
 
     // Also mark car as unavailable
     await setCarAvailability(carId, false);
+
+    // Link payment to rental if ID provided
+    if (initialPaymentId) {
+        await supabase
+            .from('payments')
+            .update({ rental_id: data.id })
+            .eq('id', initialPaymentId);
+    }
 
     return {
         id: data.id,
@@ -1128,28 +1147,48 @@ export const requestProposalPayment = async (rentalId: string): Promise<void> =>
 // INSTALLMENTS (WEEKLY PAYMENTS)
 // ============================================
 
-export const generateWeeklyInstallments = async (rental: Rental): Promise<void> => {
+export const generateRentalInstallments = async (rental: Rental): Promise<void> => {
     const startDate = new Date(rental.startDate);
     const endDate = new Date(rental.endDate);
     const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    // Determine number of weeks (minimum 1)
-    const weeks = Math.ceil(diffDays / 7);
-    const weeklyAmount = rental.totalPrice / weeks;
+    const frequency = rental.car?.paymentFrequency || 'monthly';
+    let intervalDays = 30;
+    let label = 'Mês';
+
+    if (frequency === 'weekly') {
+        intervalDays = 7;
+        label = 'Semana';
+    } else if (frequency === 'biweekly') {
+        intervalDays = 15;
+        label = 'Quinzena';
+    }
+
+    // Determine number of periods (minimum 1)
+    const periods = Math.ceil(diffDays / intervalDays);
+
+    // Determine base amount per period
+    let periodAmount = rental.totalPrice / periods;
+
+    // If car has specific prices, use them
+    if (frequency === 'weekly' && rental.car?.pricePerWeek) periodAmount = rental.car.pricePerWeek;
+    else if (frequency === 'biweekly' && rental.car?.pricePer15Days) periodAmount = rental.car.pricePer15Days;
+    else if (frequency === 'monthly' && rental.car?.pricePerMonth) periodAmount = rental.car.pricePerMonth;
 
     // Prepare Installments
     const installments = [];
-    for (let i = 0; i < weeks; i++) {
+    for (let i = 0; i < periods; i++) {
         const dueDate = new Date(startDate);
-        dueDate.setDate(startDate.getDate() + (i * 7)); // Every 7 days from start
+        dueDate.setDate(startDate.getDate() + (i * intervalDays));
 
         installments.push({
             rental_id: rental.id,
             installment_number: i + 1,
             due_date: dueDate.toISOString(),
-            amount: weeklyAmount,
-            status: 'pending'
+            amount: periodAmount,
+            status: 'pending',
+            description: `${label} ${i + 1}`
         });
     }
 
@@ -1162,6 +1201,9 @@ export const generateWeeklyInstallments = async (rental: Rental): Promise<void> 
         throw new Error(error.message);
     }
 };
+
+// Keep alias for compatibility if needed, but we should update callers
+export const generateWeeklyInstallments = generateRentalInstallments;
 
 export const getRentalInstallments = async (rentalId: string): Promise<any[]> => {
     const { data, error } = await supabase

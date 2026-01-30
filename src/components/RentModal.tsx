@@ -9,7 +9,7 @@ import { ContractSignatureModal } from './ContractSignatureModal';
 interface RentModalProps {
     car: Car;
     currentUser: User;
-    onConfirm: (startDate: string, endDate: string, totalPrice: number) => void;
+    onConfirm: (startDate: string, endDate: string, totalPrice: number, paymentId?: string) => void;
     onClose: () => void;
     onNeedKYC: () => void;
     onSendProposal?: (startDate: string, months: number, offerPrice: number) => void; // Nova prop para proposta Uber
@@ -55,53 +55,115 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
     };
 
     const calculateBestPrice = (days: number) => {
-        let dailyRate = car.pricePerDay;
         let plan = 'Diária';
-        let total = days * dailyRate;
+        let total = 0;
+        let dailyRate = car.pricePerDay;
+        let cycles = 0;
+        let cyclePrice = 0;
 
-        // Fallback: Se diária for 0, mas tiver preço semanal, usa pro-rata base
-        if (dailyRate === 0 && car.pricePerWeek && car.pricePerWeek > 0) {
-            dailyRate = car.pricePerWeek / 7;
-            // Não mudamos o nome do plano ainda, pois pode cair na regra de "Semanal" oficial abaixo se days >= 7
-            total = dailyRate * days;
-        }
-
-        // Lógica de preço progressivo
-        if (days >= 30 && car.pricePerMonth) {
-            dailyRate = car.pricePerMonth / 30; // Preço dia efetivo no plano mensal
+        // Lógica de preço por CICLOS FECHADOS (não proporcional)
+        if (days >= 30 && car.pricePerMonth && car.pricePerMonth > 0) {
+            // MENSAL: Calcular quantos meses completos + dias extras
+            cycles = Math.floor(days / 30);
+            const extraDays = days % 30;
+            
+            cyclePrice = car.pricePerMonth;
+            total = cycles * car.pricePerMonth;
+            
+            // Dias extras: usar quinzenal, semanal ou diária
+            if (extraDays > 0) {
+                if (extraDays >= 15 && car.pricePer15Days) {
+                    total += car.pricePer15Days;
+                } else if (extraDays >= 7 && car.pricePerWeek) {
+                    total += car.pricePerWeek;
+                } else {
+                    total += extraDays * car.pricePerDay;
+                }
+            }
+            
             plan = 'Mensal';
-            total = dailyRate * days;
-        } else if (days >= 15 && car.pricePer15Days) {
-            dailyRate = car.pricePer15Days / 15;
+            dailyRate = car.pricePerMonth / 30;
+        } else if (days >= 15 && car.pricePer15Days && car.pricePer15Days > 0) {
+            // QUINZENAL: Calcular quantas quinzenas completas + dias extras
+            cycles = Math.floor(days / 15);
+            const extraDays = days % 15;
+            
+            cyclePrice = car.pricePer15Days;
+            total = cycles * car.pricePer15Days;
+            
+            // Dias extras: usar semanal ou diária
+            if (extraDays > 0) {
+                if (extraDays >= 7 && car.pricePerWeek) {
+                    total += car.pricePerWeek;
+                } else {
+                    total += extraDays * car.pricePerDay;
+                }
+            }
+            
             plan = 'Quinzenal';
-            total = dailyRate * days;
-        } else if (days >= 7 && car.pricePerWeek) {
-            dailyRate = car.pricePerWeek / 7;
+            dailyRate = car.pricePer15Days / 15;
+        } else if (days >= 7 && car.pricePerWeek && car.pricePerWeek > 0) {
+            // SEMANAL: Calcular quantas semanas completas + dias extras
+            cycles = Math.floor(days / 7);
+            const extraDays = days % 7;
+            
+            cyclePrice = car.pricePerWeek;
+            total = cycles * car.pricePerWeek;
+            
+            // Dias extras: usar diária
+            if (extraDays > 0) {
+                total += extraDays * car.pricePerDay;
+            }
+            
             plan = 'Semanal';
-            total = dailyRate * days;
+            dailyRate = car.pricePerWeek / 7;
+        } else {
+            // DIÁRIA: Menos de 7 dias ou sem preços especiais
+            plan = 'Diária';
+            total = days * car.pricePerDay;
+            dailyRate = car.pricePerDay;
+            cycles = days;
+            cyclePrice = car.pricePerDay;
         }
 
-        return { total, plan, dailyRate };
+        return { total, plan, dailyRate, cycles, cyclePrice };
     };
 
     const days = calculateDays();
-    const { total: rentalPrice, dailyRate: effectiveDailyRate, plan } = calculateBestPrice(days);
+    const { total: rentalPrice, dailyRate: effectiveDailyRate, plan, cycles, cyclePrice } = calculateBestPrice(days);
 
     // Determine the First Cycle Price (Base Period Price)
-    let firstCyclePrice = rentalPrice; // Default to full price (e.g. for short daily rentals)
+    // Para modo UBER, usar o paymentFrequency do locador
+    const effectivePlan = (mode === 'uber' && car.paymentFrequency)
+        ? (car.paymentFrequency === 'weekly' ? 'Semanal' : car.paymentFrequency === 'biweekly' ? 'Quinzenal' : 'Mensal')
+        : plan;
 
-    if (plan === 'Mensal' && car.pricePerMonth) {
-        firstCyclePrice = car.pricePerMonth;
-    } else if (plan === 'Quinzenal' && car.pricePer15Days) {
-        firstCyclePrice = car.pricePer15Days;
-    } else if (plan === 'Semanal' && car.pricePerWeek) {
-        firstCyclePrice = car.pricePerWeek;
+    // Primeiro pagamento = primeiro ciclo + caução
+    let firstCyclePrice = cyclePrice;
+    
+    if (mode === 'uber') {
+        // Para motorista app, usar o preço definido pelo locador para a frequência escolhida
+        if (effectivePlan === 'Mensal' && car.pricePerMonth) {
+            firstCyclePrice = car.pricePerMonth;
+        } else if (effectivePlan === 'Quinzenal' && car.pricePer15Days) {
+            firstCyclePrice = car.pricePer15Days;
+        } else if (effectivePlan === 'Semanal' && car.pricePerWeek) {
+            firstCyclePrice = car.pricePerWeek;
+        } else {
+            // Fallback se o locador não definiu o preço para essa frequência
+            firstCyclePrice = rentalPrice / Math.max(1, cycles);
+        }
+    } else {
+        // Para modo diário, usar o preço total calculado se for curto (< 1 ciclo)
+        if (cycles < 1) {
+            firstCyclePrice = rentalPrice;
+        }
     }
 
     const securityDeposit = car.requiresSecurityDeposit ? (car.securityDepositAmount || 0) : 0;
     const initialTotal = firstCyclePrice + securityDeposit;
 
-    // We still track the full contract value for the Rental record
+    // Valor total do contrato (sem caução, pois caução é devolvida)
     const contractTotalValue = rentalPrice;
 
     const handleAction = async () => {
@@ -158,7 +220,7 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
         console.log("Contract Signed:", signatureUrl);
         setShowPayment(false);
         // Pass contractTotalValue as the total rental value, but payment was initialTotal
-        onConfirm(startDate, endDate, contractTotalValue);
+        onConfirm(startDate, endDate, contractTotalValue, payment.id);
     };
 
     // Render Contract Modal
@@ -376,43 +438,86 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
 
                         {/* Summary Card */}
                         <div className={`rounded-xl p-4 border ${mode === 'uber' ? 'bg-purple-50/30 border-purple-100' : 'bg-slate-50 border-slate-100'}`}>
-                            <h4 className="text-sm font-semibold text-slate-700 mb-3 flex justify-between">
-                                Resumo de Valores
-                                <span className={`text-xs px-2 py-0.5 rounded-full ${mode === 'uber' ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700'}`}>
-                                    {plan}
+                            <h4 className="text-sm font-semibold text-slate-700 mb-3 flex justify-between items-center">
+                                <span>Resumo de Valores</span>
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${mode === 'uber' ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                                    {effectivePlan}
                                 </span>
                             </h4>
-                            <div className="space-y-2 text-sm">
+                            <div className="space-y-2.5 text-sm">
+                                {/* Plano e Frequência */}
+                                <div className="bg-white/50 rounded-lg p-2 border border-slate-200">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="text-xs font-semibold text-slate-600">Plano Escolhido</span>
+                                        <span className="text-xs font-bold text-indigo-600">{effectivePlan}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-slate-700">
+                                        <span className="text-xs">Valor do {effectivePlan === 'Mensal' ? 'Mês' : effectivePlan === 'Semanal' ? 'Semana' : effectivePlan === 'Quinzenal' ? '15 Dias' : 'Dia'}</span>
+                                        <span className="font-bold">R$ {cyclePrice.toFixed(2)}</span>
+                                    </div>
+                                </div>
+
+                                {/* Duração Total */}
                                 <div className="flex justify-between text-slate-600">
-                                    <span>Diária Efetiva</span>
-                                    <span>R$ {effectiveDailyRate.toFixed(2)} / dia</span>
+                                    <span>Duração Total</span>
+                                    <span className="font-medium">{days} {days === 1 ? 'dia' : 'dias'}</span>
                                 </div>
-                                <div className="flex justify-between text-slate-600">
-                                    <span>Duração</span>
-                                    <span>{days} dias</span>
-                                </div>
-                                <div className="flex justify-between text-slate-800 pt-1 font-medium">
-                                    <span>Valor do Período ({plan})</span>
-                                    <span>R$ {firstCyclePrice.toFixed(2)}</span>
-                                </div>
-                                {car.requiresSecurityDeposit && (
-                                    <div className="flex justify-between text-amber-700">
-                                        <span className="flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Caução (Devolvida no final)</span>
-                                        <span>R$ {car.securityDepositAmount?.toFixed(2)}</span>
+
+                                {/* Número de Ciclos */}
+                                {cycles >= 1 && (
+                                    <div className="flex justify-between text-slate-600">
+                                        <span>{effectivePlan === 'Mensal' ? 'Meses' : effectivePlan === 'Semanal' ? 'Semanas' : effectivePlan === 'Quinzenal' ? 'Quinzenas' : 'Dias'}</span>
+                                        <span className="font-medium">{cycles > 0 ? Math.floor(cycles) : cycles}</span>
                                     </div>
                                 )}
+
+                                {/* Valor Total do Contrato */}
+                                <div className="flex justify-between text-slate-800 pt-1 font-medium border-t border-slate-200">
+                                    <span>Valor Total do Contrato</span>
+                                    <span>R$ {contractTotalValue.toFixed(2)}</span>
+                                </div>
+
+                                {/* Caução */}
+                                {car.requiresSecurityDeposit && (
+                                    <div className="flex justify-between text-amber-700 bg-amber-50 rounded-lg p-2 border border-amber-200">
+                                        <span className="flex items-center gap-1 text-xs font-semibold">
+                                            <AlertTriangle className="w-3 h-3" /> 
+                                            Caução (Devolvida)
+                                        </span>
+                                        <span className="font-bold">R$ {car.securityDepositAmount?.toFixed(2)}</span>
+                                    </div>
+                                )}
+
+                                {/* Observação sobre pagamentos */}
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 text-[10px] text-blue-800">
+                                    <p className="font-semibold mb-0.5">ℹ️ Como funciona:</p>
+                                    <p>
+                                        {mode === 'uber' 
+                                            ? `Você pagará ${firstCyclePrice.toFixed(2)} por ${effectivePlan === 'Mensal' ? 'mês' : effectivePlan === 'Semanal' ? 'semana' : 'quinzena'}. O primeiro pagamento inclui caução.`
+                                            : `Pagamento no início. Caução devolvida no final do contrato.`
+                                        }
+                                    </p>
+                                </div>
                             </div>
 
-                            <div className="border-t-2 border-slate-200 pt-3 mt-2">
+                            {/* Total a Pagar Agora */}
+                            <div className="border-t-2 border-slate-300 pt-3 mt-3">
                                 <div className="flex justify-between items-end">
                                     <div className="text-left">
                                         <span className="block text-sm font-bold text-slate-900">Total a Pagar Agora</span>
-                                        <span className="text-[10px] text-slate-500 font-normal">1º Ciclo + Caução</span>
+                                        <span className="text-[10px] text-slate-500 font-normal">
+                                            {mode === 'uber' ? '1º Ciclo' : 'Valor Total'} {car.requiresSecurityDeposit ? '+ Caução' : ''}
+                                        </span>
                                     </div>
                                     <div className="text-right">
-                                        <span className={`text-xl font-black ${mode === 'uber' ? 'text-purple-600' : 'text-indigo-600'}`}>
+                                        <span className={`text-2xl font-black ${mode === 'uber' ? 'text-purple-600' : 'text-indigo-600'}`}>
                                             R$ {initialTotal.toFixed(2)}
                                         </span>
+                                        {car.requiresSecurityDeposit && (
+                                            <p className="text-[9px] text-slate-500 mt-0.5">
+                                                (R$ {firstCyclePrice.toFixed(2)} + R$ {securityDeposit.toFixed(2)})
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             </div>

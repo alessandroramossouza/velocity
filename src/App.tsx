@@ -358,14 +358,14 @@ function AppContent() {
     }
   };
 
-  const handleRentCar = async (carId: string | number, startDate: string, endDate: string, totalPrice: number) => {
+  const handleRentCar = async (carId: string | number, startDate: string, endDate: string, totalPrice: number, paymentId?: string) => {
     if (!currentUser) return;
 
     try {
       const car = allCars.find(c => c.id === carId);
       if (!car) throw new Error('Carro não encontrado');
 
-      await createRental(carId, currentUser.id, car.ownerId, startDate, endDate, totalPrice);
+      await createRental(carId, currentUser.id, car.ownerId, startDate, endDate, totalPrice, paymentId);
 
       setAllCars(allCars.map(c =>
         c.id === carId ? { ...c, isAvailable: false } : c

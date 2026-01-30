@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { Rental, User, Review } from '../types';
-import { getRenterHistory, getRenterProposals, signProposalContract, confirmProposalPayment, getRentalInstallments, payInstallment, generateWeeklyInstallments } from '../services/api';
+import { getRenterHistory, getRenterProposals, signProposalContract, confirmProposalPayment, getRentalInstallments, payInstallment, generateRentalInstallments } from '../services/api';
 import {
     Calendar, CheckCircle, Clock, Car as CarIcon, DollarSign, Star, XCircle,
     Repeat, ChevronRight, MessageSquare, Loader2, FileText, CreditCard, ArrowRight, Download, PenTool, Eye
@@ -92,11 +91,11 @@ export const RenterHistory: React.FC<RenterHistoryProps> = ({ currentUser, showT
 
     const handleGenerateWeekly = async (rental: Rental) => {
         try {
-            await generateWeeklyInstallments(rental);
-            showToast?.('Plano semanal gerado com sucesso!', 'success');
+            await generateRentalInstallments(rental);
+            showToast?.('Plano de pagamentos gerado com sucesso!', 'success');
             loadHistory(); // Refresh to see the new installments
         } catch (error) {
-            showToast?.('Erro ao gerar plano semanal.', 'error');
+            showToast?.('Erro ao gerar plano de pagamentos.', 'error');
         }
     };
 
@@ -323,13 +322,13 @@ export const RenterHistory: React.FC<RenterHistoryProps> = ({ currentUser, showT
                                                     {step === 1 && 'Aguardando revisão do Locador'}
                                                     {step === 2 && 'O Locador enviou o contrato'}
                                                     {step === 3 && 'Contrato assinado. Aguardando Locador.'}
-                                                    {step === 4 && 'Pagamento Liberado! Escolha como pagar.'}
+                                                    {step === 4 && 'Pagamento Liberado!'}
                                                 </h4>
                                                 <p className="text-xs text-slate-500 mt-1">
                                                     {step === 1 && 'O locador está analisando sua proposta.'}
                                                     {step === 2 && 'Por favor, revise e assine o contrato para prosseguir.'}
                                                     {step === 3 && 'O locador irá verificar sua assinatura e liberar o pagamento.'}
-                                                    {step === 4 && 'Você pode optar por pagar o total ou parcelar semanalmente.'}
+                                                    {step === 4 && 'Aguardando Pagamento do 1º Ciclo + Caução.'}
                                                 </p>
                                             </div>
 
@@ -359,36 +358,57 @@ export const RenterHistory: React.FC<RenterHistoryProps> = ({ currentUser, showT
                                                 <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto mt-4 md:mt-0">
                                                     <button
                                                         onClick={() => {
-                                                            // Calculate weekly amount if not exists
-                                                            let weeklyAmt = 0;
-                                                            if (hasInstallments && firstInstallment) {
-                                                                weeklyAmt = firstInstallment.amount;
+                                                            const car = proposal.car;
+                                                            const securityDeposit = (car?.requiresSecurityDeposit && car?.securityDepositAmount) ? car.securityDepositAmount : 0;
+
+                                                            // Determine Frequency, Label and Base Amount
+                                                            let frequency = car?.paymentFrequency || 'monthly'; // Default
+                                                            let baseAmount = proposal.totalPrice; // Default fallback
+                                                            let label = 'Pagamento Mensal';
+                                                            let description = '1º Mês';
+
+                                                            if (frequency === 'weekly') {
+                                                                label = 'Pagamento Semanal';
+                                                                description = '1ª Semana';
+                                                                if (hasInstallments && firstInstallment) {
+                                                                    baseAmount = firstInstallment.amount;
+                                                                } else if (car?.pricePerWeek) {
+                                                                    baseAmount = car.pricePerWeek;
+                                                                } else {
+                                                                    const weeks = Math.ceil((new Date(proposal.endDate).getTime() - new Date(proposal.startDate).getTime()) / (1000 * 60 * 60 * 24 * 7)) || 1;
+                                                                    baseAmount = proposal.totalPrice / weeks;
+                                                                }
+                                                            } else if (frequency === 'biweekly') {
+                                                                label = 'Pagamento Quinzenal (15 Dias)';
+                                                                description = '1ª Quinzena';
+                                                                if (car?.pricePer15Days) {
+                                                                    baseAmount = car.pricePer15Days;
+                                                                } else {
+                                                                    baseAmount = proposal.totalPrice / Math.ceil((new Date(proposal.endDate).getTime() - new Date(proposal.startDate).getTime()) / (1000 * 60 * 60 * 24 * 15)) || proposal.totalPrice;
+                                                                }
                                                             } else {
-                                                                // Estimate
-                                                                const startDate = new Date(proposal.startDate);
-                                                                const endDate = new Date(proposal.endDate);
-                                                                const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-                                                                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                                                                const weeks = Math.ceil(diffDays / 7) || 1;
-                                                                weeklyAmt = proposal.totalPrice / weeks;
+                                                                // Monthly
+                                                                if (car?.pricePerMonth) {
+                                                                    baseAmount = car.pricePerMonth;
+                                                                } else {
+                                                                    // Fallback
+                                                                    const months = Math.ceil((new Date(proposal.endDate).getTime() - new Date(proposal.startDate).getTime()) / (1000 * 60 * 60 * 24 * 30)) || 1;
+                                                                    baseAmount = proposal.totalPrice / months;
+                                                                }
                                                             }
+
+                                                            // Apply Security Deposit to First Payment
+                                                            const initialTotal = baseAmount + securityDeposit;
 
                                                             setPayingRental({
                                                                 ...proposal,
                                                                 _paymentOptions: [
                                                                     {
-                                                                        id: 'monthly',
-                                                                        label: 'Pagamento Mensal',
-                                                                        amount: proposal.totalPrice,
-                                                                        description: `Pagamento Total: ${proposal.car?.make} ${proposal.car?.model}`,
+                                                                        id: frequency,
+                                                                        label: label,
+                                                                        amount: initialTotal,
+                                                                        description: `${description}${securityDeposit > 0 ? ' + Caução' : ''}`,
                                                                         recommended: true
-                                                                    },
-                                                                    {
-                                                                        id: 'weekly',
-                                                                        label: 'Pagamento Semanal',
-                                                                        amount: weeklyAmt,
-                                                                        description: `Parcela Semanal: ${proposal.car?.make} ${proposal.car?.model}`,
-                                                                        tag: 'Flexível'
                                                                     }
                                                                 ]
                                                             } as any);
@@ -407,281 +427,283 @@ export const RenterHistory: React.FC<RenterHistoryProps> = ({ currentUser, showT
                         })
                     )}
                 </div>
-            )}
+            )
+            }
 
-            {signingRental && (
-                <ContractSignatureModal
-                    isOpen={true}
-                    onClose={() => setSigningRental(null)}
-                    rental={signingRental}
-                    car={signingRental.car as any}
-                    user={currentUser}
-                    onSuccess={async (url) => {
-                        await signProposalContract(signingRental.id, url);
-                        showToast?.('Contrato assinado com sucesso!', 'success');
-                        setSigningRental(null);
-                        loadHistory();
-                    }}
-                />
-            )}
+            {
+                signingRental && (
+                    <ContractSignatureModal
+                        isOpen={true}
+                        onClose={() => setSigningRental(null)}
+                        rental={signingRental}
+                        car={signingRental.car as any}
+                        user={currentUser}
+                        onSuccess={async (url) => {
+                            await signProposalContract(signingRental.id, url);
+                            showToast?.('Contrato assinado com sucesso!', 'success');
+                            setSigningRental(null);
+                            loadHistory();
+                        }}
+                    />
+                )
+            }
 
-            {payingRental && (
-                <PaymentModal
-                    isOpen={true}
-                    onClose={() => setPayingRental(null)}
-                    userId={currentUser.id}
-                    amount={payingRental.totalPrice} // Default, overridden by options
-                    description={`Pagamento: ${(payingRental as any).car?.make}`}
-                    rentalId={payingRental.id}
-                    receiverId={payingRental.ownerId}
-                    paymentOptions={(payingRental as any)._paymentOptions} // Pass the options
-                    onSuccess={async (payment) => {
-                        // Check which option was selected via Metadata or inferred amount
-                        const isWeekly = (payingRental as any)._paymentOptions?.find((o: any) => o.id === 'weekly')?.amount === payment.amount;
+            {
+                payingRental && (
+                    <PaymentModal
+                        isOpen={true}
+                        onClose={() => setPayingRental(null)}
+                        userId={currentUser.id}
+                        amount={payingRental.totalPrice} // Default, overridden by options
+                        description={`Pagamento: ${(payingRental as any).car?.make}`}
+                        rentalId={payingRental.id}
+                        receiverId={payingRental.ownerId}
+                        paymentOptions={(payingRental as any)._paymentOptions} // Pass the options
+                        onSuccess={async (payment) => {
+                            try {
+                                // 1. Confirm basic payment status
+                                await confirmProposalPayment(payingRental.id);
 
-                        // Or check metaData if we added it to the payment object in PaymentModal (we passed it to create fn, but might not be returned in simple obj)
-                        // Inference by amount is safe enough here.
+                                // 2. If periodic rental (Uber Driver), generate and pay first installment
+                                const car = (payingRental as any).car;
+                                if (payingRental.rentalType === 'uber' || (car && car.paymentFrequency)) {
+                                    // Generate installments
+                                    await generateRentalInstallments(payingRental);
 
-                        if (isWeekly) {
-                            // Ensure installments exist
-                            let installments = installmentsMap[payingRental.id];
-                            if (!installments || installments.length === 0) {
-                                await generateWeeklyInstallments(payingRental);
-                                installments = await getRentalInstallments(payingRental.id);
+                                    // Fetch to mark first as paid
+                                    const installments = await getRentalInstallments(payingRental.id);
+                                    if (installments.length > 0) {
+                                        await payInstallment(installments[0].id);
+                                    }
+                                }
+
+                                showToast?.('Pagamento realizado com sucesso!', 'success');
+                                setPayingRental(null);
+                                loadHistory();
+                                setActiveTab('active');
+                            } catch (e) {
+                                console.error('Error post-payment:', e);
+                                showToast?.('Erro ao processar finalização do pagamento.', 'error');
                             }
-
-                            // Find first pending
-                            const pending = installments.find((i: any) => i.status === 'pending');
-                            if (pending) {
-                                await payInstallment(pending.id);
-                                showToast?.('Parcela semanal paga com sucesso!', 'success');
-                            } else {
-                                showToast?.('Pagamento recebido (Semanal)', 'success');
-                            }
-
-                        } else {
-                            await confirmProposalPayment(payingRental.id);
-                            showToast?.('Pagamento mensal realizado com sucesso!', 'success');
-                        }
-
-                        setPayingRental(null);
-                        loadHistory();
-                        setActiveTab('active');
-                    }}
-                />
-            )}
+                        }}
+                    />
+                )
+            }
 
             {/* Rental List (Active/Completed/All) */}
-            {activeTab !== 'proposals' && filteredRentals.length === 0 ? (
-                <div className="bg-gradient-to-br from-slate-50 to-slate-100 p-12 rounded-2xl border-2 border-dashed border-slate-200 text-center">
-                    <div className="w-20 h-20 bg-slate-200 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <CarIcon className="w-10 h-10 text-slate-400" />
+            {
+                activeTab !== 'proposals' && filteredRentals.length === 0 ? (
+                    <div className="bg-gradient-to-br from-slate-50 to-slate-100 p-12 rounded-2xl border-2 border-dashed border-slate-200 text-center">
+                        <div className="w-20 h-20 bg-slate-200 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <CarIcon className="w-10 h-10 text-slate-400" />
+                        </div>
+                        <h3 className="text-xl font-bold text-slate-700 mb-2">Nenhum aluguel encontrado</h3>
+                        <p className="text-slate-500 max-w-md mx-auto">
+                            {activeTab === 'active'
+                                ? 'Você não tem aluguéis em andamento no momento.'
+                                : activeTab === 'completed'
+                                    ? 'Você ainda não finalizou nenhum aluguel.'
+                                    : 'Você ainda não alugou nenhum carro conosco. Explore o Marketplace!'}
+                        </p>
                     </div>
-                    <h3 className="text-xl font-bold text-slate-700 mb-2">Nenhum aluguel encontrado</h3>
-                    <p className="text-slate-500 max-w-md mx-auto">
-                        {activeTab === 'active'
-                            ? 'Você não tem aluguéis em andamento no momento.'
-                            : activeTab === 'completed'
-                                ? 'Você ainda não finalizou nenhum aluguel.'
-                                : 'Você ainda não alugou nenhum carro conosco. Explore o Marketplace!'}
-                    </p>
-                </div>
-            ) : (
-                <div className="space-y-4">
-                    {filteredRentals.map(rental => (
-                        <div key={rental.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition">
-                            <div className="flex flex-col md:flex-row gap-6">
-                                {/* Car Image */}
-                                <div className="w-full md:w-40 h-28 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0">
-                                    {rental.car ? (
-                                        <img src={rental.car.imageUrl} alt={rental.car.model} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-slate-400">
-                                            <CarIcon className="w-10 h-10" />
+                ) : (
+                    <div className="space-y-4">
+                        {filteredRentals.map(rental => (
+                            <div key={rental.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition">
+                                <div className="flex flex-col md:flex-row gap-6">
+                                    {/* Car Image */}
+                                    <div className="w-full md:w-40 h-28 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0">
+                                        {rental.car ? (
+                                            <img src={rental.car.imageUrl} alt={rental.car.model} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-slate-400">
+                                                <CarIcon className="w-10 h-10" />
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Details */}
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <h3 className="text-lg font-bold text-slate-900">
+                                                    {rental.car ? `${rental.car.make} ${rental.car.model}` : 'Carro Indisponível'}
+                                                </h3>
+                                                <p className="text-sm text-slate-500">{rental.car?.category} • {rental.car?.year}</p>
+                                            </div>
+                                            <span className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 border ${getStatusStyle(rental.status)}`}>
+                                                {getStatusIcon(rental.status)}
+                                                {getStatusLabel(rental.status)}
+                                            </span>
+                                        </div>
+
+                                        <div className="mt-4 flex flex-wrap gap-3 text-sm">
+                                            <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg">
+                                                <Calendar className="w-4 h-4 text-indigo-600" />
+                                                <span className="text-slate-700">
+                                                    {new Date(rental.startDate).toLocaleDateString('pt-BR')} — {new Date(rental.endDate).toLocaleDateString('pt-BR')}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-2 bg-green-50 px-3 py-2 rounded-lg">
+                                                <DollarSign className="w-4 h-4 text-green-600" />
+                                                <span className="font-semibold text-green-700">R$ {rental.totalPrice.toFixed(2)}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Installments / Weekly Payments Display */}
+                                    {installmentsMap[rental.id] && installmentsMap[rental.id].length > 0 && (
+                                        <div className="mt-4 bg-slate-50 border border-slate-200 rounded-lg p-4">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                                                    <CreditCard className="w-4 h-4 text-indigo-600" />
+                                                    {rental.car?.paymentFrequency === 'weekly' ? 'Pagamento Semanal' : rental.car?.paymentFrequency === 'biweekly' ? 'Pagamento Quinzenal' : 'Pagamento Mensal'}
+                                                </h4>
+                                                <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-1 rounded">
+                                                    Motorista App
+                                                </span>
+                                            </div>
+
+                                            {(() => {
+                                                const installments = installmentsMap[rental.id];
+                                                const pending = installments.find((i: any) => i.status === 'pending');
+                                                const nextDue = pending;
+                                                // Calculate progress
+                                                const paidCount = installments.filter((i: any) => i.status === 'paid').length;
+                                                const totalCount = installments.length;
+                                                const percent = (paidCount / totalCount) * 100;
+
+                                                // Alert Logic
+                                                let alert = null;
+                                                if (nextDue) {
+                                                    const daysUntil = Math.ceil((new Date(nextDue.dueDate).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
+                                                    if (daysUntil < 0) alert = <span className="text-xs font-bold text-red-600 bg-red-100 px-2 py-1 rounded flex items-center gap-1 animate-pulse"><XCircle className="w-3 h-3" /> Atrasado!</span>;
+                                                    else if (daysUntil <= 3) alert = <span className="text-xs font-bold text-orange-600 bg-orange-100 px-2 py-1 rounded flex items-center gap-1"><Clock className="w-3 h-3" /> Vence em {daysUntil} dias</span>;
+                                                }
+
+                                                return (
+                                                    <div className="space-y-3">
+                                                        {/* Progress Bar */}
+                                                        <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+                                                            <span>Progresso: {paidCount}/{totalCount} {rental.car?.paymentFrequency === 'weekly' ? 'semanas' : rental.car?.paymentFrequency === 'biweekly' ? 'quinzenas' : 'meses'}</span>
+                                                            <span>{Math.round(percent)}%</span>
+                                                        </div>
+                                                        <div className="w-full bg-slate-200 rounded-full h-2">
+                                                            <div className="bg-indigo-600 h-2 rounded-full transition-all duration-500" style={{ width: `${percent}%` }}></div>
+                                                        </div>
+
+                                                        {nextDue ? (
+                                                            <div className="flex items-center justify-between bg-white p-3 rounded border border-slate-200 shadow-sm mt-3">
+                                                                <div>
+                                                                    <p className="text-xs text-slate-500 font-semibold uppercase">Próximo Pagamento</p>
+                                                                    <p className="font-bold text-slate-800 text-lg">R$ {nextDue.amount.toFixed(2)}</p>
+                                                                    <p className="text-xs text-slate-500">Vence em: {new Date(nextDue.dueDate).toLocaleDateString()}</p>
+                                                                </div>
+                                                                <div className="text-right flex flex-col items-end gap-2">
+                                                                    {alert}
+                                                                    <button
+                                                                        onClick={() => setPayingRental({ ...rental, customPayment: nextDue } as any)}
+                                                                        className="bg-green-600 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-green-700 transition shadow-sm"
+                                                                    >
+                                                                        Pagar Parcela {nextDue.installmentNumber}
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="text-center py-2 text-green-600 font-bold text-sm bg-green-50 rounded border border-green-100">
+                                                                Todas as parcelas quitadas! 🎉
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
                                     )}
-                                </div>
 
-                                {/* Details */}
-                                <div className="flex-1">
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <h3 className="text-lg font-bold text-slate-900">
-                                                {rental.car ? `${rental.car.make} ${rental.car.model}` : 'Carro Indisponível'}
-                                            </h3>
-                                            <p className="text-sm text-slate-500">{rental.car?.category} • {rental.car?.year}</p>
-                                        </div>
-                                        <span className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 border ${getStatusStyle(rental.status)}`}>
-                                            {getStatusIcon(rental.status)}
-                                            {getStatusLabel(rental.status)}
-                                        </span>
-                                    </div>
-
-                                    <div className="mt-4 flex flex-wrap gap-3 text-sm">
-                                        <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg">
-                                            <Calendar className="w-4 h-4 text-indigo-600" />
-                                            <span className="text-slate-700">
-                                                {new Date(rental.startDate).toLocaleDateString('pt-BR')} — {new Date(rental.endDate).toLocaleDateString('pt-BR')}
+                                    {/* Actions */}
+                                    <div className="mt-4 flex gap-2">
+                                        {rental.status === 'completed' && !existingReviews[rental.id] && (
+                                            <button
+                                                onClick={() => setReviewModal(rental)}
+                                                className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-lg font-medium hover:bg-yellow-600 transition text-sm"
+                                            >
+                                                <Star className="w-4 h-4" />
+                                                Avaliar
+                                            </button>
+                                        )}
+                                        {rental.status === 'completed' && existingReviews[rental.id] && (
+                                            <span className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-sm">
+                                                <CheckCircle className="w-4 h-4 text-green-600" />
+                                                Avaliado
                                             </span>
-                                        </div>
-                                        <div className="flex items-center gap-2 bg-green-50 px-3 py-2 rounded-lg">
-                                            <DollarSign className="w-4 h-4 text-green-600" />
-                                            <span className="font-semibold text-green-700">R$ {rental.totalPrice.toFixed(2)}</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Installments / Weekly Payments Display */}
-                                {installmentsMap[rental.id] && installmentsMap[rental.id].length > 0 && (
-                                    <div className="mt-4 bg-slate-50 border border-slate-200 rounded-lg p-4">
-                                        <div className="flex items-center justify-between mb-3">
-                                            <h4 className="font-bold text-slate-800 flex items-center gap-2">
-                                                <CreditCard className="w-4 h-4 text-indigo-600" />
-                                                Pagamento Semanal
-                                            </h4>
-                                            <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-1 rounded">
-                                                Motorista App
-                                            </span>
-                                        </div>
-
-                                        {(() => {
-                                            const installments = installmentsMap[rental.id];
-                                            const pending = installments.find((i: any) => i.status === 'pending');
-                                            const nextDue = pending;
-                                            // Calculate progress
-                                            const paidCount = installments.filter((i: any) => i.status === 'paid').length;
-                                            const totalCount = installments.length;
-                                            const percent = (paidCount / totalCount) * 100;
-
-                                            // Alert Logic
-                                            let alert = null;
-                                            if (nextDue) {
-                                                const daysUntil = Math.ceil((new Date(nextDue.dueDate).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
-                                                if (daysUntil < 0) alert = <span className="text-xs font-bold text-red-600 bg-red-100 px-2 py-1 rounded flex items-center gap-1 animate-pulse"><XCircle className="w-3 h-3" /> Atrasado!</span>;
-                                                else if (daysUntil <= 3) alert = <span className="text-xs font-bold text-orange-600 bg-orange-100 px-2 py-1 rounded flex items-center gap-1"><Clock className="w-3 h-3" /> Vence em {daysUntil} dias</span>;
-                                            }
-
-                                            return (
-                                                <div className="space-y-3">
-                                                    {/* Progress Bar */}
-                                                    <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                                                        <span>Progresso: {paidCount}/{totalCount} semanas</span>
-                                                        <span>{Math.round(percent)}%</span>
-                                                    </div>
-                                                    <div className="w-full bg-slate-200 rounded-full h-2">
-                                                        <div className="bg-indigo-600 h-2 rounded-full transition-all duration-500" style={{ width: `${percent}%` }}></div>
-                                                    </div>
-
-                                                    {nextDue ? (
-                                                        <div className="flex items-center justify-between bg-white p-3 rounded border border-slate-200 shadow-sm mt-3">
-                                                            <div>
-                                                                <p className="text-xs text-slate-500 font-semibold uppercase">Próximo Pagamento</p>
-                                                                <p className="font-bold text-slate-800 text-lg">R$ {nextDue.amount.toFixed(2)}</p>
-                                                                <p className="text-xs text-slate-500">Vence em: {new Date(nextDue.dueDate).toLocaleDateString()}</p>
-                                                            </div>
-                                                            <div className="text-right flex flex-col items-end gap-2">
-                                                                {alert}
-                                                                <button
-                                                                    onClick={() => setPayingRental({ ...rental, customPayment: nextDue } as any)}
-                                                                    className="bg-green-600 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-green-700 transition shadow-sm"
-                                                                >
-                                                                    Pagar Parcela {nextDue.installmentNumber}
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="text-center py-2 text-green-600 font-bold text-sm bg-green-50 rounded border border-green-100">
-                                                            Todas as parcelas quitadas! 🎉
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })()}
-                                    </div>
-                                )}
-
-                                {/* Actions */}
-                                <div className="mt-4 flex gap-2">
-                                    {rental.status === 'completed' && !existingReviews[rental.id] && (
-                                        <button
-                                            onClick={() => setReviewModal(rental)}
-                                            className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-lg font-medium hover:bg-yellow-600 transition text-sm"
-                                        >
-                                            <Star className="w-4 h-4" />
-                                            Avaliar
+                                        )}
+                                        <button className="flex items-center gap-2 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition text-sm">
+                                            <Repeat className="w-4 h-4" />
+                                            Alugar Novamente
                                         </button>
-                                    )}
-                                    {rental.status === 'completed' && existingReviews[rental.id] && (
-                                        <span className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-sm">
-                                            <CheckCircle className="w-4 h-4 text-green-600" />
-                                            Avaliado
-                                        </span>
-                                    )}
-                                    <button className="flex items-center gap-2 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition text-sm">
-                                        <Repeat className="w-4 h-4" />
-                                        Alugar Novamente
-                                    </button>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ))}
-                </div>
-            )}
+                        ))}
+                    </div>
+                )
+            }
 
             {/* Review Modal */}
-            {reviewModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-fade-in" onClick={() => setReviewModal(null)}>
-                    <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
-                        <h3 className="text-xl font-bold text-slate-800 mb-2">Avaliar Veículo</h3>
-                        <p className="text-sm text-slate-500 mb-6">
-                            {reviewModal.car?.make} {reviewModal.car?.model}
-                        </p>
+            {
+                reviewModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-fade-in" onClick={() => setReviewModal(null)}>
+                        <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
+                            <h3 className="text-xl font-bold text-slate-800 mb-2">Avaliar Veículo</h3>
+                            <p className="text-sm text-slate-500 mb-6">
+                                {reviewModal.car?.make} {reviewModal.car?.model}
+                            </p>
 
-                        {/* Star Rating */}
-                        <div className="flex justify-center gap-2 mb-6">
-                            {[1, 2, 3, 4, 5].map(star => (
+                            {/* Star Rating */}
+                            <div className="flex justify-center gap-2 mb-6">
+                                {[1, 2, 3, 4, 5].map(star => (
+                                    <button
+                                        key={star}
+                                        onClick={() => setReviewRating(star)}
+                                        className="p-1 transition hover:scale-110"
+                                    >
+                                        <Star
+                                            className={`w-10 h-10 ${star <= reviewRating ? 'text-yellow-400 fill-yellow-400' : 'text-slate-300'}`}
+                                        />
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Comment */}
+                            <textarea
+                                value={reviewComment}
+                                onChange={e => setReviewComment(e.target.value)}
+                                placeholder="Conte como foi sua experiência..."
+                                rows={4}
+                                className="w-full p-3 border border-slate-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+
+                            {/* Actions */}
+                            <div className="flex gap-3 mt-6">
                                 <button
-                                    key={star}
-                                    onClick={() => setReviewRating(star)}
-                                    className="p-1 transition hover:scale-110"
+                                    onClick={() => setReviewModal(null)}
+                                    className="flex-1 py-3 border border-slate-300 rounded-lg text-slate-700 font-medium hover:bg-slate-50 transition"
                                 >
-                                    <Star
-                                        className={`w-10 h-10 ${star <= reviewRating ? 'text-yellow-400 fill-yellow-400' : 'text-slate-300'}`}
-                                    />
+                                    Cancelar
                                 </button>
-                            ))}
-                        </div>
-
-                        {/* Comment */}
-                        <textarea
-                            value={reviewComment}
-                            onChange={e => setReviewComment(e.target.value)}
-                            placeholder="Conte como foi sua experiência..."
-                            rows={4}
-                            className="w-full p-3 border border-slate-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-
-                        {/* Actions */}
-                        <div className="flex gap-3 mt-6">
-                            <button
-                                onClick={() => setReviewModal(null)}
-                                className="flex-1 py-3 border border-slate-300 rounded-lg text-slate-700 font-medium hover:bg-slate-50 transition"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={handleSubmitReview}
-                                disabled={submittingReview}
-                                className="flex-1 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition flex items-center justify-center gap-2"
-                            >
-                                {submittingReview ? <Loader2 className="w-5 h-5 animate-spin" /> : <Star className="w-5 h-5" />}
-                                Enviar Avaliação
-                            </button>
+                                <button
+                                    onClick={handleSubmitReview}
+                                    disabled={submittingReview}
+                                    className="flex-1 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition flex items-center justify-center gap-2"
+                                >
+                                    {submittingReview ? <Loader2 className="w-5 h-5 animate-spin" /> : <Star className="w-5 h-5" />}
+                                    Enviar Avaliação
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 };
-

@@ -140,6 +140,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
   const [features, setFeatures] = useState<string[]>([]);
   const [requiresSecurityDeposit, setRequiresSecurityDeposit] = useState(false);
   const [securityDepositAmount, setSecurityDepositAmount] = useState<number>(0);
+  const [paymentFrequency, setPaymentFrequency] = useState<'weekly' | 'biweekly' | 'monthly'>('monthly');
 
   // Image Upload State
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -354,6 +355,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
     setFeatures(car.features);
     setRequiresSecurityDeposit(car.requiresSecurityDeposit || false);
     setSecurityDepositAmount(car.securityDepositAmount || 0);
+    setPaymentFrequency(car.paymentFrequency || 'monthly');
     setIsAdding(true);
     setImageFile(null);
     setContractFile(null);
@@ -370,7 +372,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
   const resetForm = () => {
     setMake(''); setModel(''); setDescription(''); setPrice(0); setImageFile(null); setFeatures([]);
     setPriceWeek(undefined); setPrice15Days(undefined); setPriceMonth(undefined);
-    setRequiresSecurityDeposit(false); setSecurityDepositAmount(0);
+    setRequiresSecurityDeposit(false); setSecurityDepositAmount(0); setPaymentFrequency('monthly');
     setContractFile(null); setExistingContractUrl(null);
   };
 
@@ -465,6 +467,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
       pricePerMonth: priceMonth,
       requiresSecurityDeposit,
       securityDepositAmount: requiresSecurityDeposit ? securityDepositAmount : 0,
+      paymentFrequency, // Add new field
       description, imageUrl: finalImageUrl, features,
       contractPdfUrl: finalContractUrl,
     };
@@ -649,6 +652,40 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
                   placeholder="Mensal"
                 />
               </div>
+            </div>
+
+            {/* Payment Frequency Setting */}
+            <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-200">
+              <label className="block text-sm font-bold text-indigo-900 mb-2">Frequência Preferida de Pagamento (Motorista App)</label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPaymentFrequency('weekly')}
+                  className={`py-2 px-3 rounded-lg text-sm font-medium border transition ${paymentFrequency === 'weekly' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-100'}`}
+                >
+                  Semanal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentFrequency('biweekly')}
+                  className={`py-2 px-3 rounded-lg text-sm font-medium border transition ${paymentFrequency === 'biweekly' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-100'}`}
+                >
+                  15 Dias
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentFrequency('monthly')}
+                  className={`py-2 px-3 rounded-lg text-sm font-medium border transition ${paymentFrequency === 'monthly' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-100'}`}
+                >
+                  Mensal
+                </button>
+              </div>
+              <p className="text-[10px] text-indigo-700 mt-2">
+                Define como o contrato será cobrado para aluguéis de longo prazo (Uber/99).
+                {paymentFrequency === 'weekly' && ' O locatário pagará por semana.'}
+                {paymentFrequency === 'biweekly' && ' O locatário pagará a cada 15 dias.'}
+                {paymentFrequency === 'monthly' && ' O locatário pagará por mês.'}
+              </p>
             </div>
 
             {/* Security Deposit Section */}

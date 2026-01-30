@@ -13,7 +13,7 @@ import { RentModal } from './RentModal';
 interface RenterMarketplaceProps {
   cars: Car[];
   currentUser: User;
-  onRentCar: (carId: string | number, startDate: string, endDate: string, totalPrice: number) => Promise<void>;
+  onRentCar: (carId: string | number, startDate: string, endDate: string, totalPrice: number, paymentId?: string) => Promise<void>;
 }
 
 type SortOption = 'recent' | 'price_asc' | 'price_desc' | 'rating';
@@ -158,9 +158,9 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars, curr
     }
   };
 
-  const handleRentConfirm = async (startDate: string, endDate: string, totalPrice: number) => {
+  const handleRentConfirm = async (startDate: string, endDate: string, totalPrice: number, paymentId?: string) => {
     if (!selectedCar) return;
-    await onRentCar(selectedCar.id, startDate, endDate, totalPrice);
+    await onRentCar(selectedCar.id, startDate, endDate, totalPrice, paymentId);
     setSelectedCar(null);
   };
 
