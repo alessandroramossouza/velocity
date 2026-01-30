@@ -64,6 +64,10 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
             dailyRate = car.pricePerMonth / 30; // Preço dia efetivo no plano mensal
             plan = 'Mensal';
             total = dailyRate * days;
+        } else if (days >= 15 && car.pricePer15Days) {
+            dailyRate = car.pricePer15Days / 15;
+            plan = 'Quinzenal';
+            total = dailyRate * days;
         } else if (days >= 7 && car.pricePerWeek) {
             dailyRate = car.pricePerWeek / 7;
             plan = 'Semanal';
@@ -354,6 +358,12 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
                                         R$ {totalPrice.toFixed(2)}
                                     </span>
                                 </div>
+                                {car.requiresSecurityDeposit && (
+                                    <div className="pt-2 text-xs text-amber-700 flex items-center gap-1 justify-end">
+                                        <AlertTriangle className="w-3 h-3" />
+                                        + Caução de R$ {car.securityDepositAmount?.toFixed(2)} (Reembolsável)
+                                    </div>
+                                )}
                             </div>
                         </div>
 

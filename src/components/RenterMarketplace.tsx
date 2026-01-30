@@ -655,18 +655,24 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars, curr
             {/* Content */}
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-16rem)]">
               {/* Pricing Cards */}
-              <div className="grid grid-cols-3 gap-3 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
                 <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl p-4 text-center border border-indigo-200">
                   <p className="text-xs text-indigo-600 font-medium mb-1">Por Dia</p>
                   <p className="text-2xl font-bold text-indigo-700">R$ {detailsCar.pricePerDay}</p>
                 </div>
                 <div className="bg-gradient-to-br from-violet-50 to-violet-100 rounded-xl p-4 text-center border border-violet-200">
                   <p className="text-xs text-violet-600 font-medium mb-1">Por Semana</p>
-                  <p className="text-2xl font-bold text-violet-700">R$ {detailsCar.pricePerWeek || (detailsCar.pricePerDay * 6).toFixed(0)}</p>
+                  <p className="text-2xl font-bold text-violet-700">R$ {detailsCar.pricePerWeek || (detailsCar.pricePerDay * 7).toFixed(0)}</p>
                 </div>
+                {detailsCar.pricePer15Days && (
+                  <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl p-4 text-center border border-amber-200">
+                    <p className="text-xs text-amber-600 font-medium mb-1">Por Quinzena</p>
+                    <p className="text-2xl font-bold text-amber-700">R$ {detailsCar.pricePer15Days}</p>
+                  </div>
+                )}
                 <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 text-center border border-purple-200">
                   <p className="text-xs text-purple-600 font-medium mb-1">Por Mês</p>
-                  <p className="text-2xl font-bold text-purple-700">R$ {detailsCar.pricePerMonth || (detailsCar.pricePerDay * 25).toFixed(0)}</p>
+                  <p className="text-2xl font-bold text-purple-700">R$ {detailsCar.pricePerMonth || (detailsCar.pricePerDay * 30).toFixed(0)}</p>
                 </div>
               </div>
 
@@ -712,11 +718,17 @@ export const RenterMarketplace: React.FC<RenterMarketplaceProps> = ({ cars, curr
                   <span>Categoria: <strong>{detailsCar.category}</strong></span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <div className={`w-3 h-3 rounded-full ${detailsCar.isAvailable ? 'bg-green-500' : 'bg-red-500'}`} />
                   <span className={detailsCar.isAvailable ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
                     {detailsCar.isAvailable ? 'Disponível' : 'Indisponível'}
                   </span>
                 </div>
+
+                {detailsCar.requiresSecurityDeposit && (
+                  <div className="flex items-center gap-2 text-sm text-slate-600 w-full pt-2 border-t border-slate-200 mt-1">
+                    <Shield className="w-4 h-4 text-amber-500" />
+                    <span>Caução Exigida (Garantia): <strong className="text-amber-700">R$ {detailsCar.securityDepositAmount?.toFixed(2)}</strong></span>
+                  </div>
+                )}
               </div>
 
               {/* Rating */}

@@ -134,6 +134,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
   const [category, setCategory] = useState<Car['category']>('Sedan');
   const [price, setPrice] = useState(0);
   const [priceWeek, setPriceWeek] = useState<number | undefined>();
+  const [price15Days, setPrice15Days] = useState<number | undefined>();
   const [priceMonth, setPriceMonth] = useState<number | undefined>();
   const [description, setDescription] = useState('');
   const [features, setFeatures] = useState<string[]>([]);
@@ -347,6 +348,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
     setCategory(car.category);
     setPrice(car.pricePerDay);
     setPriceWeek(car.pricePerWeek);
+    setPrice15Days(car.pricePer15Days);
     setPriceMonth(car.pricePerMonth);
     setDescription(car.description);
     setFeatures(car.features);
@@ -367,7 +369,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
 
   const resetForm = () => {
     setMake(''); setModel(''); setDescription(''); setPrice(0); setImageFile(null); setFeatures([]);
-    setPriceWeek(undefined); setPriceMonth(undefined);
+    setPriceWeek(undefined); setPrice15Days(undefined); setPriceMonth(undefined);
     setRequiresSecurityDeposit(false); setSecurityDepositAmount(0);
     setContractFile(null); setExistingContractUrl(null);
   };
@@ -459,6 +461,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
       make, model, year, category,
       pricePerDay: price,
       pricePerWeek: priceWeek,
+      pricePer15Days: price15Days,
       pricePerMonth: priceMonth,
       requiresSecurityDeposit,
       securityDepositAmount: requiresSecurityDeposit ? securityDepositAmount : 0,
@@ -610,65 +613,75 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
               <label className="block text-sm font-medium text-slate-700 mb-1">Características (vírgula)</label>
               <input type="text" value={features.join(', ')} onChange={e => setFeatures(e.target.value.split(',').map(s => s.trim()))} className="w-full p-2 border rounded-md" />
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1">Dia (R$)</label>
                 <input type="number" value={price} onChange={e => setPrice(Number(e.target.value))} className="w-full p-2 border rounded-md font-bold text-green-700" required />
               </div>
-              <div>
-                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Semana (R$)</label>
-                  <input
-                    type="number"
-                    value={priceWeek || ''}
-                    onChange={e => setPriceWeek(Number(e.target.value))}
-                    className="w-full p-2 border rounded-md text-sm cursor-text bg-white"
-                    placeholder="Defina o valor semanal"
-                  />
-                </div>
-                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Mês (R$)</label>
-                  <input
-                    type="number"
-                    value={priceMonth || ''}
-                    onChange={e => setPriceMonth(Number(e.target.value))}
-                    className="w-full p-2 border rounded-md text-sm cursor-text bg-white"
-                    placeholder="Defina o valor mensal"
-                  />
-                </div>
+
+              <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Semana (R$)</label>
+                <input
+                  type="number"
+                  value={priceWeek || ''}
+                  onChange={e => setPriceWeek(Number(e.target.value))}
+                  className="w-full p-1.5 border rounded-md text-sm bg-white"
+                  placeholder="Semanal"
+                />
               </div>
 
-              {/* Security Deposit Section */}
-              <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-2 text-sm font-bold text-amber-900 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={requiresSecurityDeposit}
-                      onChange={e => setRequiresSecurityDeposit(e.target.checked)}
-                      className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
-                    />
-                    Exigir Caução (Garantia)
-                  </label>
-                  <Shield className="w-5 h-5 text-amber-500" />
-                </div>
+              <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Quinzena (R$)</label>
+                <input
+                  type="number"
+                  value={price15Days || ''}
+                  onChange={e => setPrice15Days(Number(e.target.value))}
+                  className="w-full p-1.5 border rounded-md text-sm bg-white"
+                  placeholder="15 Dias"
+                />
+              </div>
 
-                {requiresSecurityDeposit && (
-                  <div className="animate-fade-in">
-                    <label className="block text-xs font-medium text-amber-800 mb-1">Valor da Caução (R$)</label>
-                    <input
-                      type="number"
-                      value={securityDepositAmount}
-                      onChange={e => setSecurityDepositAmount(Number(e.target.value))}
-                      className="w-full p-2 border border-amber-300 rounded-md focus:ring-2 focus:ring-amber-500 bg-white"
-                      placeholder="Ex: 1500.00"
-                    />
-                    <p className="text-[10px] text-amber-700 mt-1">Este valor será retido como garantia e devolvido ao final do contrato.</p>
-                  </div>
-                )}
+              <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Mês (R$)</label>
+                <input
+                  type="number"
+                  value={priceMonth || ''}
+                  onChange={e => setPriceMonth(Number(e.target.value))}
+                  className="w-full p-1.5 border rounded-md text-sm bg-white"
+                  placeholder="Mensal"
+                />
               </div>
             </div>
 
+            {/* Security Deposit Section */}
+            <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 text-sm font-bold text-amber-900 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={requiresSecurityDeposit}
+                    onChange={e => setRequiresSecurityDeposit(e.target.checked)}
+                    className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
+                  />
+                  Exigir Caução (Garantia)
+                </label>
+                <Shield className="w-5 h-5 text-amber-500" />
+              </div>
+
+              {requiresSecurityDeposit && (
+                <div className="animate-fade-in">
+                  <label className="block text-xs font-medium text-amber-800 mb-1">Valor da Caução (R$)</label>
+                  <input
+                    type="number"
+                    value={securityDepositAmount}
+                    onChange={e => setSecurityDepositAmount(Number(e.target.value))}
+                    className="w-full p-2 border border-amber-300 rounded-md focus:ring-2 focus:ring-amber-500 bg-white"
+                    placeholder="Ex: 1500.00"
+                  />
+                  <p className="text-[10px] text-amber-700 mt-1">Este valor será retido como garantia e devolvido ao final do contrato.</p>
+                </div>
+              )}
+            </div>
           </div>
 
           <div>

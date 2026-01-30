@@ -9,6 +9,7 @@ export interface Car {
   pricePerDay: number;
   description: string;
   pricePerWeek?: number;
+  pricePer15Days?: number; // Quinzena
   pricePerMonth?: number;
   imageUrl: string;
   features: string[];
