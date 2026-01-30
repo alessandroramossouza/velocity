@@ -87,14 +87,22 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
     const days = calculateDays();
     const { total: rentalPrice, dailyRate: effectiveDailyRate, plan } = calculateBestPrice(days);
 
-    const securityDeposit = car.requiresSecurityDeposit ? (car.securityDepositAmount || 0) : 0;
-    const initialTotal = rentalPrice + securityDeposit;
+    // Determine the First Cycle Price (Base Period Price)
+    let firstCyclePrice = rentalPrice; // Default to full price (e.g. for short daily rentals)
 
-    // We keep 'totalPrice' variable name if used downstream, but for clarity let's use 'rentalPrice' for rent
-    // and pass 'rentalPrice' to functions, but show 'initialTotal' to user.
-    // However, logic below uses 'totalPrice'. Let's alias it back for minimal refactor, 
-    // or just use 'rentalPrice' and update refs.
-    const totalPrice = rentalPrice;
+    if (plan === 'Mensal' && car.pricePerMonth) {
+        firstCyclePrice = car.pricePerMonth;
+    } else if (plan === 'Quinzenal' && car.pricePer15Days) {
+        firstCyclePrice = car.pricePer15Days;
+    } else if (plan === 'Semanal' && car.pricePerWeek) {
+        firstCyclePrice = car.pricePerWeek;
+    }
+
+    const securityDeposit = car.requiresSecurityDeposit ? (car.securityDepositAmount || 0) : 0;
+    const initialTotal = firstCyclePrice + securityDeposit;
+
+    // We still track the full contract value for the Rental record
+    const contractTotalValue = rentalPrice;
 
     const handleAction = async () => {
         if (days <= 0 && mode === 'daily') {
@@ -102,7 +110,7 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
             return;
         }
 
-        if (totalPrice === 0 && mode === 'daily') {
+        if (contractTotalValue === 0 && mode === 'daily') {
             alert('Este veículo não possui preço definido para este período (dias insuficientes para tarifa semanal/mensal).');
             return;
         }
@@ -116,7 +124,7 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
         if (mode === 'uber') {
             // Fluxo Proposta UBER
             if (onSendProposal) {
-                onSendProposal(startDate, uberMonths, totalPrice);
+                onSendProposal(startDate, uberMonths, contractTotalValue);
                 setStep('proposal_success');
 
                 // --- NEW: Notify Owner ---
@@ -149,7 +157,8 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
     const handlePaymentSuccess = (payment: Payment) => {
         console.log("Contract Signed:", signatureUrl);
         setShowPayment(false);
-        onConfirm(startDate, endDate, initialTotal);
+        // Pass contractTotalValue as the total rental value, but payment was initialTotal
+        onConfirm(startDate, endDate, contractTotalValue);
     };
 
     // Render Contract Modal
@@ -165,7 +174,7 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
                     id: crypto.randomUUID(),
                     startDate,
                     endDate,
-                    totalPrice,
+                    totalPrice: contractTotalValue,
                     ownerId: car.ownerId,
                     carId: String(car.id),
                     renterId: currentUser.id,
@@ -383,12 +392,12 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
                                     <span>{days} dias</span>
                                 </div>
                                 <div className="flex justify-between text-slate-800 pt-1 font-medium">
-                                    <span>Valor do Aluguel</span>
-                                    <span>R$ {totalPrice.toFixed(2)}</span>
+                                    <span>Valor do Período ({plan})</span>
+                                    <span>R$ {firstCyclePrice.toFixed(2)}</span>
                                 </div>
                                 {car.requiresSecurityDeposit && (
                                     <div className="flex justify-between text-amber-700">
-                                        <span className="flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Caução (Única)</span>
+                                        <span className="flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Caução (Devolvida no final)</span>
                                         <span>R$ {car.securityDepositAmount?.toFixed(2)}</span>
                                     </div>
                                 )}
@@ -396,14 +405,14 @@ export const RentModal: React.FC<RentModalProps> = ({ car, currentUser, onConfir
 
                             <div className="border-t-2 border-slate-200 pt-3 mt-2">
                                 <div className="flex justify-between items-end">
-                                    <span className="text-sm font-bold text-slate-900">Total a Pagar (Retirada)</span>
+                                    <div className="text-left">
+                                        <span className="block text-sm font-bold text-slate-900">Total a Pagar Agora</span>
+                                        <span className="text-[10px] text-slate-500 font-normal">1º Ciclo + Caução</span>
+                                    </div>
                                     <div className="text-right">
                                         <span className={`text-xl font-black ${mode === 'uber' ? 'text-purple-600' : 'text-indigo-600'}`}>
                                             R$ {initialTotal.toFixed(2)}
                                         </span>
-                                        {car.requiresSecurityDeposit && (
-                                            <p className="text-[10px] text-slate-400 font-normal">Aluguel + Caução Reembolsável</p>
-                                        )}
                                     </div>
                                 </div>
                             </div>
