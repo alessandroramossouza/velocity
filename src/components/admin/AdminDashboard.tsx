@@ -6,12 +6,13 @@ import {
 import {
     Users, Car, DollarSign, Activity, TrendingUp, AlertTriangle,
     ShieldCheck, Wrench, Search, Filter, Download, FileText, CheckCircle, XCircle, Clock, Calendar,
-    X, Save, ExternalLink
+    X, Save, ExternalLink, Percent
 } from 'lucide-react';
 import { getAdminStats, getDetailedRentals, getDetailedUsers, updateUser } from '../../services/admin/adminService';
 import { createNotification } from '../../services/api';
 import { useToast } from '../Toast';
 import { DashboardStats } from '../../types';
+import { CommissionDashboard } from './CommissionDashboard';
 
 const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444'];
 
@@ -20,7 +21,7 @@ export const AdminDashboard: React.FC = () => {
     const [rentals, setRentals] = useState<any[]>([]);
     const [users, setUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'overview' | 'rentals' | 'users' | 'payments'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'rentals' | 'users' | 'payments' | 'commissions'>('overview');
     const [searchTerm, setSearchTerm] = useState('');
 
     // Edit User Modal State
@@ -189,6 +190,16 @@ export const AdminDashboard: React.FC = () => {
                         className={`px-4 py-2 rounded-md text-sm font-medium transition whitespace-nowrap ${activeTab === 'overview' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}
                     >
                         Visão Geral
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('commissions')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition whitespace-nowrap flex items-center gap-2 relative ${activeTab === 'commissions' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}
+                    >
+                        <Percent className="w-4 h-4" />
+                        Comissões
+                        <span className="absolute -top-1 -right-1 bg-green-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                            NOVO
+                        </span>
                     </button>
                     <button
                         onClick={() => setActiveTab('payments')}
@@ -699,6 +710,11 @@ export const AdminDashboard: React.FC = () => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* COMMISSIONS TAB */}
+            {activeTab === 'commissions' && (
+                <CommissionDashboard />
             )}
 
             {/* Edit User Modal */}

@@ -5,12 +5,14 @@ import { getActiveRentals, completeRental, getOwnerRentalHistory, getPartners, c
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import {
   Sparkles, Plus, Car as CarIcon, DollarSign, Loader2, Upload, Pencil, RotateCcw,
-  Calendar, AlertCircle, LayoutGrid, History, ChevronRight, User as UserIcon, CheckCircle, XCircle, Wrench, Shield, CreditCard, FileText, Eye, UploadCloud, Clock
+  Calendar, AlertCircle, LayoutGrid, History, ChevronRight, User as UserIcon, CheckCircle, XCircle, Wrench, Shield, CreditCard, FileText, Eye, UploadCloud, Clock, TrendingUp, Gift
 } from 'lucide-react';
 import { uploadContractTemplate } from '../services/contractService';
 import { supabase } from '../lib/supabase';
 import { PaymentModal } from './PaymentModal';
 import { Payment } from '../services/payments';
+import { OwnerFinancialDashboard } from './OwnerFinancialDashboard';
+import { ReferralProgram } from './ReferralProgram';
 
 const RenterDetailsModal = ({ renter, onClose }: { renter: User, onClose: () => void }) => {
   if (!renter) return null;
@@ -106,7 +108,7 @@ interface OwnerDashboardProps {
 }
 
 export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, onAddCar, onUpdateCar, onCarReturned, showToast, refreshTrigger = 0 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'cars' | 'history' | 'partners'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'cars' | 'history' | 'partners' | 'financial' | 'referrals'>('overview');
   const [isAdding, setIsAdding] = useState(false);
   const [editingCar, setEditingCar] = useState<Car | null>(null);
   const [loadingAI, setLoadingAI] = useState(false);
@@ -733,14 +735,19 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
   }
 
   // Render Tabs
-  const renderTabButton = (id: 'overview' | 'cars' | 'history' | 'partners', icon: React.ReactNode, label: string) => (
+  const renderTabButton = (id: 'overview' | 'cars' | 'history' | 'partners' | 'financial' | 'referrals', icon: React.ReactNode, label: string, badge?: string) => (
     <button
       onClick={() => setActiveTab(id)}
-      className={`flex items-center gap-2 px-6 py-3 border-b-2 transition-colors duration-200 ${activeTab === id ? 'border-indigo-600 text-indigo-600 font-bold' : 'border-transparent text-slate-500 hover:text-slate-700'
+      className={`flex items-center gap-2 px-6 py-3 border-b-2 transition-colors duration-200 relative ${activeTab === id ? 'border-indigo-600 text-indigo-600 font-bold' : 'border-transparent text-slate-500 hover:text-slate-700'
         }`}
     >
       {icon}
       {label}
+      {badge && (
+        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+          {badge}
+        </span>
+      )}
     </button>
   );
 
@@ -751,6 +758,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="flex overflow-x-auto">
           {renderTabButton('overview', <LayoutGrid className="w-5 h-5" />, 'Visão Geral')}
+          {renderTabButton('financial', <TrendingUp className="w-5 h-5" />, 'Financeiro', 'NOVO')}
+          {renderTabButton('referrals', <Gift className="w-5 h-5" />, 'Indicações', 'NOVO')}
           {renderTabButton('cars', <CarIcon className="w-5 h-5" />, 'Minha Frota')}
           {renderTabButton('history', <History className="w-5 h-5" />, 'Histórico de Locações')}
           {renderTabButton('partners', <Wrench className="w-5 h-5" />, 'Parceiros & Serviços')}
@@ -1361,6 +1370,16 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
             </div>
           )}
         </div>
+      )}
+
+      {/* FINANCIAL TAB */}
+      {activeTab === 'financial' && (
+        <OwnerFinancialDashboard user={user} />
+      )}
+
+      {/* REFERRALS TAB */}
+      {activeTab === 'referrals' && (
+        <ReferralProgram user={user} />
       )}
     </div>
   );

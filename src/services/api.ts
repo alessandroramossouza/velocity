@@ -799,6 +799,9 @@ export const getPartners = async (): Promise<Partner[]> => {
     return data as unknown as Partner[];
 };
 
+
+
+
 // Get partner profile by user_id
 export const getPartnerByUserId = async (userId: string): Promise<Partner | null> => {
     const { data, error } = await supabase
