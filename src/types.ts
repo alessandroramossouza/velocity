@@ -19,7 +19,15 @@ export interface Car {
   requiresSecurityDeposit?: boolean;
   securityDepositAmount?: number;
   paymentFrequency?: 'weekly' | 'biweekly' | 'monthly'; // Frequência preferida de pagamento (Motorista App)
+  // Novos campos V5 - Dados completos para contrato
+  plate?: string;           // Placa do veículo (ABC-1234 ou ABC1D23)
+  renavam?: string;         // RENAVAM
+  chassis?: string;         // Número do chassi/VIN
+  color?: string;           // Cor do veículo
+  fuelType?: string;        // Combustível: Gasolina, Etanol, Flex, Diesel, Elétrico
+  odometer?: number;        // Quilometragem atual
 }
+
 
 export interface SignedContract {
   id: string;
@@ -47,8 +55,10 @@ export interface User {
   name: string;
   role: 'owner' | 'renter' | 'partner' | 'admin';
   email: string;
+  phone?: string;
   // KYC Fields
   cnhUrl?: string;
+  cnhNumber?: string; // Número da CNH
   selfieUrl?: string;
   isVerified?: boolean;
   verificationDate?: string;

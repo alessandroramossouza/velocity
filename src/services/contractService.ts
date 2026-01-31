@@ -97,12 +97,18 @@ export async function generateFilledContract(
         });
         y -= 40;
 
-        // 2. Dados do Veículo (Box)
+        // 2. Dados do Veículo (Box) - V5 ULTRA COMPLETO
         coverPage.drawText('1. VEÍCULO LOCADO', { x: 50, y, size: 12, font: boldFont, color: rgb(0.2, 0.2, 0.2) });
         y -= 20;
         coverPage.drawText(`Marca/Modelo: ${car.make} ${car.model}`, { x: 50, y, size: 10, font });
         y -= 15;
-        coverPage.drawText(`Ano: ${car.year} | Categoria: ${car.category}`, { x: 50, y, size: 10, font });
+        coverPage.drawText(`Ano: ${car.year} | Categoria: ${car.category} | Cor: ${car.color || 'N/A'}`, { x: 50, y, size: 10, font });
+        y -= 15;
+        coverPage.drawText(`Placa: ${car.plate || 'N/A'} | RENAVAM: ${car.renavam || 'N/A'}`, { x: 50, y, size: 10, font });
+        y -= 15;
+        coverPage.drawText(`Chassi: ${car.chassis || 'N/A'}`, { x: 50, y, size: 10, font });
+        y -= 15;
+        coverPage.drawText(`Combustível: ${car.fuelType || 'Flex'} | Hodômetro: ${car.odometer?.toLocaleString('pt-BR') || 0} km`, { x: 50, y, size: 10, font });
         y -= 15;
         coverPage.drawText(`Valor da Diária: R$ ${car.pricePerDay.toFixed(2)}`, { x: 50, y, size: 10, font });
         y -= 30;
@@ -437,9 +443,13 @@ export async function generateDefaultContract(
     const renterAddress = `${user.address || ''}, ${user.number || ''} - ${user.neighborhood || ''}, CEP: ${user.cep || ''}, ${user.city || ''}/${user.state || ''}`;
 
     const carDesc = `${car.make.toUpperCase()}/${car.model.toUpperCase()} ${car.year}`;
-    // Como não temos placa no objeto Car, vamos usar um placeholder ou se tiver num futuro update
-    const carPlaca = "ABC-1234"; // Placeholder ou futuro campo
-    const carColor = "A DEFINIR";
+    // V5: Usar campos reais do veículo
+    const carPlaca = car.plate || 'N/INFORMADO';
+    const carColor = car.color || 'N/INFORMADO';
+    const carRenavam = car.renavam || 'N/INFORMADO';
+    const carChassis = car.chassis || 'N/INFORMADO';
+    const carFuel = car.fuelType || 'Flex';
+    const carOdometer = car.odometer?.toLocaleString('pt-BR') || '0';
 
     const startDate = new Date(rental.startDate);
     const endDate = new Date(rental.endDate);
@@ -532,9 +542,16 @@ export async function generateDefaultContract(
     writeText('As partes acima identificadas têm entre si justo e acertado o presente contrato de locação de veículo, ficando desde já aceito nas cláusulas e condições abaixo descritas:', 10);
     addSpace(15);
 
-    // Cláusula 1
+    // Cláusula 1 - V5: Detalhes completos do veículo
     writeText('CLÁUSULA 1ª – DO OBJETO', 11, true);
-    writeText(`O primeiro compromitente, neste instrumento denominado LOCADOR, como legítimo proprietário do veículo ${carDesc}, placa ${carPlaca}, cor ${carColor}, estando o mesmo devidamente livre e desembaraçado de quaisquer ônus, ALUGAM neste ato ao segundo compromitente, LOCATÁRIO, pelo período de ${diffDays} dias, iniciando em ${new Date(rental.startDate).toLocaleDateString('pt-BR')} e encerrando em ${new Date(rental.endDate).toLocaleDateString('pt-BR')}.`, 10);
+    writeText(`O primeiro compromitente, neste instrumento denominado LOCADOR, como legítimo proprietário do veículo abaixo descrito, estando o mesmo devidamente livre e desembaraçado de quaisquer ônus, ALUGA neste ato ao segundo compromitente, LOCATÁRIO, pelo período de ${diffDays} dias, iniciando em ${new Date(rental.startDate).toLocaleDateString('pt-BR')} e encerrando em ${new Date(rental.endDate).toLocaleDateString('pt-BR')}.`, 10);
+    addSpace(5);
+    writeText('DESCRIÇÃO DO VEÍCULO:', 10, true);
+    writeText(`• Marca/Modelo: ${carDesc}`, 10);
+    writeText(`• Placa: ${carPlaca} | Cor: ${carColor}`, 10);
+    writeText(`• RENAVAM: ${carRenavam}`, 10);
+    writeText(`• Chassi: ${carChassis}`, 10);
+    writeText(`• Combustível: ${carFuel} | Hodômetro: ${carOdometer} km`, 10);
     addSpace(10);
 
     // Cláusula 2

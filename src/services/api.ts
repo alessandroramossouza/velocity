@@ -27,6 +27,12 @@ export const getCars = async (): Promise<Car[]> => {
             securityDepositAmount:security_deposit_amount,
             contractPdfUrl:contract_pdf_url,
             paymentFrequency:payment_frequency,
+            plate,
+            renavam,
+            chassis,
+            color,
+            fuelType:fuel_type,
+            odometer,
             created_at
         `);
 
@@ -55,7 +61,14 @@ export const createCar = async (car: Omit<Car, 'id'>): Promise<Car> => {
         price_per_15_days: car.pricePer15Days,
         security_deposit_amount: car.securityDepositAmount,
         contract_pdf_url: car.contractPdfUrl,
-        payment_frequency: car.paymentFrequency
+        payment_frequency: car.paymentFrequency,
+        // V5: Novos campos para contrato
+        plate: car.plate,
+        renavam: car.renavam,
+        chassis: car.chassis,
+        color: car.color,
+        fuel_type: car.fuelType,
+        odometer: car.odometer
     };
 
     let { data, error } = await supabase
@@ -153,7 +166,14 @@ export const updateCar = async (car: Car): Promise<Car> => {
         requires_security_deposit: car.requiresSecurityDeposit,
         security_deposit_amount: car.securityDepositAmount,
         contract_pdf_url: car.contractPdfUrl,
-        payment_frequency: car.paymentFrequency
+        payment_frequency: car.paymentFrequency,
+        // V5: Novos campos para contrato
+        plate: car.plate,
+        renavam: car.renavam,
+        chassis: car.chassis,
+        color: car.color,
+        fuel_type: car.fuelType,
+        odometer: car.odometer
     };
 
     let { data, error } = await supabase
@@ -1181,17 +1201,30 @@ export const generateRentalInstallments = async (rental: Rental): Promise<void> 
 
     // Prepare Installments
     const installments = [];
+    const securityDeposit = (rental.car?.requiresSecurityDeposit && rental.car?.securityDepositAmount)
+        ? rental.car.securityDepositAmount
+        : 0;
+
     for (let i = 0; i < periods; i++) {
         const dueDate = new Date(startDate);
         dueDate.setDate(startDate.getDate() + (i * intervalDays));
+
+        let amount = periodAmount;
+        let description = `${label} ${i + 1}`;
+
+        // Add Security Deposit to First Installment
+        if (i === 0 && securityDeposit > 0) {
+            amount += securityDeposit;
+            description += ` + Caução (R$ ${securityDeposit.toFixed(2)})`;
+        }
 
         installments.push({
             rental_id: rental.id,
             installment_number: i + 1,
             due_date: dueDate.toISOString(),
-            amount: periodAmount,
+            amount: amount,
             status: 'pending',
-            description: `${label} ${i + 1}`
+            description: description
         });
     }
 
@@ -1304,4 +1337,321 @@ export const createNotification = async (notification: Omit<Notification, 'id' |
         console.error('Error creating notification:', error);
         throw error;
     }
+};
+
+// ============================================
+// CHAT / CONVERSATIONS
+// ============================================
+
+export interface Conversation {
+    id: string;
+    rentalId: string;
+    ownerId: string;
+    renterId: string;
+    lastMessageAt?: string;
+    createdAt: string;
+}
+
+export interface Message {
+    id: string;
+    conversationId: string;
+    senderId: string;
+    content: string;
+    messageType: 'text' | 'image' | 'document' | 'system';
+    attachmentUrl?: string;
+    isRead: boolean;
+    createdAt: string;
+}
+
+export const getOrCreateConversation = async (rentalId: string, ownerId: string, renterId: string): Promise<Conversation | null> => {
+    // Try to find existing conversation
+    const { data: existing } = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('rental_id', rentalId)
+        .single();
+
+    if (existing) {
+        return {
+            id: existing.id,
+            rentalId: existing.rental_id,
+            ownerId: existing.owner_id,
+            renterId: existing.renter_id,
+            lastMessageAt: existing.last_message_at,
+            createdAt: existing.created_at
+        };
+    }
+
+    // Create new conversation
+    const { data: newConv, error } = await supabase
+        .from('conversations')
+        .insert({ rental_id: rentalId, owner_id: ownerId, renter_id: renterId })
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error creating conversation:', error);
+        return null;
+    }
+
+    return {
+        id: newConv.id,
+        rentalId: newConv.rental_id,
+        ownerId: newConv.owner_id,
+        renterId: newConv.renter_id,
+        lastMessageAt: newConv.last_message_at,
+        createdAt: newConv.created_at
+    };
+};
+
+export const getConversations = async (userId: string): Promise<Conversation[]> => {
+    const { data, error } = await supabase
+        .from('conversations')
+        .select('*')
+        .or(`owner_id.eq.${userId},renter_id.eq.${userId}`)
+        .order('last_message_at', { ascending: false, nullsFirst: false });
+
+    if (error) {
+        console.error('Error fetching conversations:', error);
+        return [];
+    }
+
+    return data.map((c: any) => ({
+        id: c.id,
+        rentalId: c.rental_id,
+        ownerId: c.owner_id,
+        renterId: c.renter_id,
+        lastMessageAt: c.last_message_at,
+        createdAt: c.created_at
+    }));
+};
+
+export const getMessages = async (conversationId: string): Promise<Message[]> => {
+    const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true });
+
+    if (error) {
+        console.error('Error fetching messages:', error);
+        return [];
+    }
+
+    return data.map((m: any) => ({
+        id: m.id,
+        conversationId: m.conversation_id,
+        senderId: m.sender_id,
+        content: m.content,
+        messageType: m.message_type,
+        attachmentUrl: m.attachment_url,
+        isRead: m.is_read,
+        createdAt: m.created_at
+    }));
+};
+
+export const sendMessage = async (conversationId: string, senderId: string, content: string, messageType: string = 'text', attachmentUrl?: string): Promise<Message | null> => {
+    const { data, error } = await supabase
+        .from('messages')
+        .insert({
+            conversation_id: conversationId,
+            sender_id: senderId,
+            content,
+            message_type: messageType,
+            attachment_url: attachmentUrl
+        })
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error sending message:', error);
+        return null;
+    }
+
+    return {
+        id: data.id,
+        conversationId: data.conversation_id,
+        senderId: data.sender_id,
+        content: data.content,
+        messageType: data.message_type,
+        attachmentUrl: data.attachment_url,
+        isRead: data.is_read,
+        createdAt: data.created_at
+    };
+};
+
+export const markMessagesAsRead = async (conversationId: string, userId: string): Promise<void> => {
+    await supabase
+        .from('messages')
+        .update({ is_read: true })
+        .eq('conversation_id', conversationId)
+        .neq('sender_id', userId);
+};
+
+export const getUnreadMessagesCount = async (userId: string): Promise<number> => {
+    // Get all conversations for user
+    const { data: convs } = await supabase
+        .from('conversations')
+        .select('id')
+        .or(`owner_id.eq.${userId},renter_id.eq.${userId}`);
+
+    if (!convs || convs.length === 0) return 0;
+
+    const convIds = convs.map(c => c.id);
+
+    const { count, error } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .in('conversation_id', convIds)
+        .neq('sender_id', userId)
+        .eq('is_read', false);
+
+    if (error) {
+        console.error('Error counting unread messages:', error);
+        return 0;
+    }
+
+    return count || 0;
+};
+
+// ============================================
+// VEHICLE INSPECTION
+// ============================================
+
+export interface Inspection {
+    id: string;
+    rentalId: string;
+    carId: string;
+    inspectorId: string;
+    inspectionType: 'check_in' | 'check_out';
+    status: 'pending' | 'completed' | 'disputed';
+    notes?: string;
+    damageReport: { angle: string; description: string }[];
+    createdAt: string;
+    completedAt?: string;
+}
+
+export interface InspectionPhoto {
+    id: string;
+    inspectionId: string;
+    photoUrl: string;
+    angle: string;
+    hasDamage: boolean;
+    damageDescription?: string;
+    createdAt: string;
+}
+
+export const getInspections = async (rentalId: string): Promise<Inspection[]> => {
+    const { data, error } = await supabase
+        .from('inspections')
+        .select('*')
+        .eq('rental_id', rentalId)
+        .order('created_at', { ascending: true });
+
+    if (error) {
+        console.error('Error fetching inspections:', error);
+        return [];
+    }
+
+    return data.map((i: any) => ({
+        id: i.id,
+        rentalId: i.rental_id,
+        carId: i.car_id,
+        inspectorId: i.inspector_id,
+        inspectionType: i.inspection_type,
+        status: i.status,
+        notes: i.notes,
+        damageReport: i.damage_report || [],
+        createdAt: i.created_at,
+        completedAt: i.completed_at
+    }));
+};
+
+export const getInspectionPhotos = async (inspectionId: string): Promise<InspectionPhoto[]> => {
+    const { data, error } = await supabase
+        .from('inspection_photos')
+        .select('*')
+        .eq('inspection_id', inspectionId)
+        .order('created_at', { ascending: true });
+
+    if (error) {
+        console.error('Error fetching inspection photos:', error);
+        return [];
+    }
+
+    return data.map((p: any) => ({
+        id: p.id,
+        inspectionId: p.inspection_id,
+        photoUrl: p.photo_url,
+        angle: p.angle,
+        hasDamage: p.has_damage,
+        damageDescription: p.damage_description,
+        createdAt: p.created_at
+    }));
+};
+
+export const createInspection = async (
+    rentalId: string,
+    carId: string,
+    inspectorId: string,
+    inspectionType: 'check_in' | 'check_out',
+    notes?: string,
+    damageReport?: { angle: string; description: string }[]
+): Promise<Inspection | null> => {
+    const { data, error } = await supabase
+        .from('inspections')
+        .insert({
+            rental_id: rentalId,
+            car_id: carId,
+            inspector_id: inspectorId,
+            inspection_type: inspectionType,
+            status: 'completed',
+            notes,
+            damage_report: damageReport || [],
+            completed_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error creating inspection:', error);
+        return null;
+    }
+
+    return {
+        id: data.id,
+        rentalId: data.rental_id,
+        carId: data.car_id,
+        inspectorId: data.inspector_id,
+        inspectionType: data.inspection_type,
+        status: data.status,
+        notes: data.notes,
+        damageReport: data.damage_report || [],
+        createdAt: data.created_at,
+        completedAt: data.completed_at
+    };
+};
+
+export const compareInspections = async (rentalId: string): Promise<{
+    checkIn: Inspection | null;
+    checkOut: Inspection | null;
+    newDamages: { angle: string; description: string }[];
+}> => {
+    const inspections = await getInspections(rentalId);
+    const checkIn = inspections.find(i => i.inspectionType === 'check_in') || null;
+    const checkOut = inspections.find(i => i.inspectionType === 'check_out') || null;
+
+    const newDamages: { angle: string; description: string }[] = [];
+
+    if (checkIn && checkOut) {
+        const checkInDamageAngles = new Set(checkIn.damageReport.map(d => d.angle));
+
+        for (const damage of checkOut.damageReport) {
+            if (!checkInDamageAngles.has(damage.angle)) {
+                newDamages.push(damage);
+            }
+        }
+    }
+
+    return { checkIn, checkOut, newDamages };
 };

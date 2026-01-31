@@ -5,14 +5,17 @@ import { getActiveRentals, completeRental, getOwnerRentalHistory, getPartners, c
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import {
   Sparkles, Plus, Car as CarIcon, DollarSign, Loader2, Upload, Pencil, RotateCcw,
-  Calendar, AlertCircle, LayoutGrid, History, ChevronRight, User as UserIcon, CheckCircle, XCircle, Wrench, Shield, CreditCard, FileText, Eye, UploadCloud, Clock, TrendingUp, Gift
+  Calendar, AlertCircle, LayoutGrid, History, ChevronRight, User as UserIcon, CheckCircle, XCircle, Wrench, Shield, CreditCard, FileText, Eye, UploadCloud, Clock, TrendingUp, Gift, MessageSquare, Camera
 } from 'lucide-react';
-import { uploadContractTemplate } from '../services/contractService';
+import { uploadContractTemplate, generateDefaultContract, generateFilledContract } from '../services/contractService';
 import { supabase } from '../lib/supabase';
 import { PaymentModal } from './PaymentModal';
 import { Payment } from '../services/payments';
 import { OwnerFinancialDashboard } from './OwnerFinancialDashboard';
 import { ReferralProgram } from './ReferralProgram';
+import { Chat } from './Chat';
+import { VehicleInspection } from './VehicleInspection';
+import { InspectionViewer } from './InspectionViewer';
 
 const RenterDetailsModal = ({ renter, onClose }: { renter: User, onClose: () => void }) => {
   if (!renter) return null;
@@ -125,6 +128,11 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
   const [showPaymentModal, setShowPaymentModal] = useState<{ serviceRequest: ServiceRequest, partner: Partner } | null>(null);
   const [viewingRenter, setViewingRenter] = useState<User | null>(null);
 
+  // Chat and Inspection modals
+  const [chatRental, setChatRental] = useState<Rental | null>(null);
+  const [inspectionRental, setInspectionRental] = useState<Rental | null>(null);
+  const [viewInspection, setViewInspection] = useState<Rental | null>(null);
+
   // Date Filters
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
@@ -143,6 +151,14 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
   const [requiresSecurityDeposit, setRequiresSecurityDeposit] = useState(false);
   const [securityDepositAmount, setSecurityDepositAmount] = useState<number>(0);
   const [paymentFrequency, setPaymentFrequency] = useState<'weekly' | 'biweekly' | 'monthly'>('monthly');
+
+  // V5: Novos campos para contrato automatizado
+  const [plate, setPlate] = useState('');
+  const [renavam, setRenavam] = useState('');
+  const [chassis, setChassis] = useState('');
+  const [color, setColor] = useState('');
+  const [fuelType, setFuelType] = useState('Flex');
+  const [odometer, setOdometer] = useState(0);
 
   // Image Upload State
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -193,15 +209,83 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
 
   const handleProposalAction = async (rentalId: string, action: 'approve' | 'reject') => {
     try {
-      if (action === 'approve') await approveRentalProposal(rentalId);
-      else await rejectRentalProposal(rentalId);
+      const rental = proposals.find(p => p.id === rentalId);
+
+      if (action === 'approve') {
+        await approveRentalProposal(rentalId);
+
+        // V5: AUTO-GERAÇÃO DO CONTRATO 🚀
+        if (rental) {
+          const car = myCars.find(c => String(c.id) === String(rental.carId));
+          const renter = rental.renter;
+
+          if (car && renter) {
+            showToast('Gerando contrato automaticamente...', 'info');
+
+            try {
+              let contractBlob: Blob;
+
+              // Tenta usar contrato customizado do locador, senão gera padrão
+              if (car.contractPdfUrl) {
+                const result = await generateFilledContract(car, renter, {
+                  id: rental.id,
+                  startDate: rental.startDate,
+                  endDate: rental.endDate,
+                  totalPrice: rental.totalPrice
+                });
+                if (result) {
+                  contractBlob = result.pdfBlob;
+                } else {
+                  throw new Error('Falha ao preencher contrato customizado');
+                }
+              } else {
+                // Gera contrato padrão
+                const result = await generateDefaultContract(car, renter, {
+                  startDate: rental.startDate,
+                  endDate: rental.endDate,
+                  totalPrice: rental.totalPrice
+                });
+                contractBlob = result.pdfBlob;
+              }
+
+              // Upload do contrato gerado
+              const fileName = `auto_contract_${rentalId}_${Date.now()}.pdf`;
+              const { error: uploadError } = await supabase.storage
+                .from('contracts')
+                .upload(fileName, contractBlob, {
+                  contentType: 'application/pdf',
+                  cacheControl: '3600'
+                });
+
+              if (uploadError) {
+                console.error('Erro ao fazer upload do contrato:', uploadError);
+                throw uploadError;
+              }
+
+              const { data: { publicUrl } } = supabase.storage
+                .from('contracts')
+                .getPublicUrl(fileName);
+
+              // Atualiza o rental com a URL do contrato
+              await uploadProposalContract(rentalId, publicUrl);
+
+              showToast('Contrato gerado e enviado automaticamente! ✅', 'success');
+            } catch (contractError) {
+              console.error('Erro na geração automática do contrato:', contractError);
+              showToast('Proposta aprovada, mas erro ao gerar contrato. Envie manualmente.', 'error');
+            }
+          }
+        }
+      } else {
+        await rejectRentalProposal(rentalId);
+      }
 
       await createNotification({
-        userId: proposals.find(p => p.id === rentalId)?.renterId || '',
+        userId: rental?.renterId || '',
         type: action === 'approve' ? 'rental_approved' : 'rental_rejected',
         title: action === 'approve' ? 'Proposta Aprovada!' : 'Proposta Rejeitada',
         message: action === 'approve'
-          ? `Sua proposta foi aprovada! O contrato foi enviado.`
+          ? `Sua proposta foi aprovada! O contrato foi enviado automaticamente para assinatura.`
           : `Sua proposta de aluguel foi rejeitada pelo proprietário.`,
         link: '/my-rentals'
       });
@@ -210,6 +294,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
       loadProposals();
       loadActiveRentals();
     } catch (e) {
+      console.error('Erro ao processar ação:', e);
       showToast('Erro ao processar ação.', 'error');
     }
   };
@@ -358,6 +443,13 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
     setRequiresSecurityDeposit(car.requiresSecurityDeposit || false);
     setSecurityDepositAmount(car.securityDepositAmount || 0);
     setPaymentFrequency(car.paymentFrequency || 'monthly');
+    // V5: Novos campos
+    setPlate(car.plate || '');
+    setRenavam(car.renavam || '');
+    setChassis(car.chassis || '');
+    setColor(car.color || '');
+    setFuelType(car.fuelType || 'Flex');
+    setOdometer(car.odometer || 0);
     setIsAdding(true);
     setImageFile(null);
     setContractFile(null);
@@ -376,6 +468,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
     setPriceWeek(undefined); setPrice15Days(undefined); setPriceMonth(undefined);
     setRequiresSecurityDeposit(false); setSecurityDepositAmount(0); setPaymentFrequency('monthly');
     setContractFile(null); setExistingContractUrl(null);
+    // V5: Reset novos campos
+    setPlate(''); setRenavam(''); setChassis(''); setColor(''); setFuelType('Flex'); setOdometer(0);
   };
 
   const handleAIAnalysis = async () => {
@@ -469,9 +563,16 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
       pricePerMonth: priceMonth,
       requiresSecurityDeposit,
       securityDepositAmount: requiresSecurityDeposit ? securityDepositAmount : 0,
-      paymentFrequency, // Add new field
+      paymentFrequency,
       description, imageUrl: finalImageUrl, features,
       contractPdfUrl: finalContractUrl,
+      // V5: Novos campos para contrato
+      plate: plate || undefined,
+      renavam: renavam || undefined,
+      chassis: chassis || undefined,
+      color: color || undefined,
+      fuelType: fuelType || 'Flex',
+      odometer: odometer || 0,
     };
 
     if (editingCar) {
@@ -544,6 +645,89 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
                 <option value="Luxury">Luxo</option>
                 <option value="Sports">Esportivo</option>
               </select>
+            </div>
+          </div>
+
+          {/* V5: Documentação do Veículo para Contrato */}
+          <div className="bg-gradient-to-r from-emerald-50 to-teal-50 p-4 rounded-xl border border-emerald-200 shadow-sm">
+            <h3 className="font-bold text-emerald-900 mb-3 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-emerald-600" />
+              📄 Documentação do Veículo (Para Contrato)
+            </h3>
+            <p className="text-xs text-emerald-700 mb-4">
+              Estes dados aparecerão automaticamente no contrato enviado ao locatário.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-emerald-800 mb-1">Placa *</label>
+                <input
+                  type="text"
+                  value={plate}
+                  onChange={e => setPlate(e.target.value.toUpperCase())}
+                  className="w-full p-2 border border-emerald-300 rounded-md bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  placeholder="ABC-1234"
+                  maxLength={8}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-emerald-800 mb-1">RENAVAM</label>
+                <input
+                  type="text"
+                  value={renavam}
+                  onChange={e => setRenavam(e.target.value.replace(/\D/g, ''))}
+                  className="w-full p-2 border border-emerald-300 rounded-md bg-white focus:ring-2 focus:ring-emerald-500"
+                  placeholder="00123456789"
+                  maxLength={11}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-emerald-800 mb-1">Chassi/VIN</label>
+                <input
+                  type="text"
+                  value={chassis}
+                  onChange={e => setChassis(e.target.value.toUpperCase())}
+                  className="w-full p-2 border border-emerald-300 rounded-md bg-white focus:ring-2 focus:ring-emerald-500"
+                  placeholder="9BWZZZ377VT..."
+                  maxLength={17}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-emerald-800 mb-1">Cor</label>
+                <input
+                  type="text"
+                  value={color}
+                  onChange={e => setColor(e.target.value)}
+                  className="w-full p-2 border border-emerald-300 rounded-md bg-white focus:ring-2 focus:ring-emerald-500"
+                  placeholder="Preto"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-emerald-800 mb-1">Combustível</label>
+                <select
+                  value={fuelType}
+                  onChange={e => setFuelType(e.target.value)}
+                  className="w-full p-2 border border-emerald-300 rounded-md bg-white focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="Flex">Flex (Gasolina/Etanol)</option>
+                  <option value="Gasolina">Gasolina</option>
+                  <option value="Etanol">Etanol</option>
+                  <option value="Diesel">Diesel</option>
+                  <option value="Elétrico">Elétrico</option>
+                  <option value="Híbrido">Híbrido</option>
+                  <option value="GNV">GNV</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-emerald-800 mb-1">Hodômetro (km)</label>
+                <input
+                  type="number"
+                  value={odometer}
+                  onChange={e => setOdometer(Number(e.target.value))}
+                  className="w-full p-2 border border-emerald-300 rounded-md bg-white focus:ring-2 focus:ring-emerald-500"
+                  placeholder="45000"
+                  min={0}
+                />
+              </div>
             </div>
           </div>
 
@@ -943,15 +1127,33 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
                           <p className="text-sm text-slate-500">{car ? `${car.make} ${car.model}` : 'Carro não encontrado'}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4">
+                      <div className="flex flex-wrap items-center gap-2">
                         <div className="text-right">
                           <p className="text-xs text-slate-500 uppercase font-semibold">Devolução</p>
                           <p className="font-bold text-slate-800">{new Date(rental.endDate).toLocaleDateString()}</p>
                         </div>
-                        <button onClick={() => rental.renter && setViewingRenter(rental.renter)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition flex items-center gap-2">
-                          <Eye className="w-4 h-4" /> Ver Ficha
+                        <button
+                          onClick={() => setChatRental(rental)}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg font-medium transition flex items-center gap-2 text-sm"
+                        >
+                          <MessageSquare className="w-4 h-4" /> Chat
                         </button>
-                        <button onClick={() => handleReturnCar(rental)} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition flex items-center gap-2">
+                        <button
+                          onClick={() => setInspectionRental(rental)}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg font-medium transition flex items-center gap-2 text-sm"
+                        >
+                          <Camera className="w-4 h-4" /> Vistoria
+                        </button>
+                        <button
+                          onClick={() => setViewInspection(rental)}
+                          className="border border-slate-300 text-slate-700 hover:bg-slate-50 px-3 py-2 rounded-lg font-medium transition flex items-center gap-2 text-sm"
+                        >
+                          <Eye className="w-4 h-4" /> Ver Vistorias
+                        </button>
+                        <button onClick={() => rental.renter && setViewingRenter(rental.renter)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-medium transition flex items-center gap-2 text-sm">
+                          <UserIcon className="w-4 h-4" /> Ficha
+                        </button>
+                        <button onClick={() => handleReturnCar(rental)} className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg font-medium transition flex items-center gap-2 text-sm">
                           <RotateCcw className="w-4 h-4" /> Receber
                         </button>
                       </div>
@@ -1381,6 +1583,48 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, myCars, on
       {activeTab === 'referrals' && (
         <ReferralProgram user={user} />
       )}
+
+      {/* Chat Modal */}
+      {chatRental && (
+        <Chat
+          currentUser={user}
+          otherUser={{ id: chatRental.renterId, name: chatRental.renter?.name || 'Locatário' }}
+          rentalId={chatRental.id}
+          onClose={() => setChatRental(null)}
+        />
+      )}
+
+      {/* Vehicle Inspection Modal */}
+      {inspectionRental && (() => {
+        const car = getCarForRental(inspectionRental);
+        return car ? (
+          <VehicleInspection
+            rentalId={inspectionRental.id}
+            carId={inspectionRental.carId}
+            car={car}
+            inspectorId={user.id}
+            inspectorName={user.name}
+            inspectionType="check_in"
+            onComplete={(inspectionId) => {
+              showToast('Vistoria de entrada registrada com sucesso!', 'success');
+              setInspectionRental(null);
+            }}
+            onClose={() => setInspectionRental(null)}
+          />
+        ) : null;
+      })()}
+
+      {/* Inspection Viewer Modal */}
+      {viewInspection && (() => {
+        const car = getCarForRental(viewInspection);
+        return car ? (
+          <InspectionViewer
+            rentalId={viewInspection.id}
+            carName={`${car.make} ${car.model}`}
+            onClose={() => setViewInspection(null)}
+          />
+        ) : null;
+      })()}
     </div>
   );
 };

@@ -3,11 +3,14 @@ import { Rental, User, Review } from '../types';
 import { getRenterHistory, getRenterProposals, signProposalContract, confirmProposalPayment, getRentalInstallments, payInstallment, generateRentalInstallments } from '../services/api';
 import {
     Calendar, CheckCircle, Clock, Car as CarIcon, DollarSign, Star, XCircle,
-    Repeat, ChevronRight, MessageSquare, Loader2, FileText, CreditCard, ArrowRight, Download, PenTool, Eye
+    Repeat, ChevronRight, MessageSquare, Loader2, FileText, CreditCard, ArrowRight, Download, PenTool, Eye, Camera
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { ContractSignatureModal } from './ContractSignatureModal';
 import { PaymentModal } from './PaymentModal';
+import { Chat } from './Chat';
+import { VehicleInspection } from './VehicleInspection';
+import { InspectionViewer } from './InspectionViewer';
 
 interface RenterHistoryProps {
     currentUser: User;
@@ -32,6 +35,11 @@ export const RenterHistory: React.FC<RenterHistoryProps> = ({ currentUser, showT
     const [submittingReview, setSubmittingReview] = useState(false);
     const [existingReviews, setExistingReviews] = useState<Record<string, boolean>>({});
     const [installmentsMap, setInstallmentsMap] = useState<Record<string, any[]>>({});
+
+    // Chat and Inspection modals
+    const [chatRental, setChatRental] = useState<Rental | null>(null);
+    const [inspectionRental, setInspectionRental] = useState<Rental | null>(null);
+    const [viewInspection, setViewInspection] = useState<Rental | null>(null);
 
     useEffect(() => {
         loadHistory();
@@ -621,7 +629,38 @@ export const RenterHistory: React.FC<RenterHistoryProps> = ({ currentUser, showT
                                     )}
 
                                     {/* Actions */}
-                                    <div className="mt-4 flex gap-2">
+                                    <div className="mt-4 flex flex-wrap gap-2">
+                                        {/* Chat Button - always available for active rentals */}
+                                        {(rental.status === 'active' || rental.status === 'payment_pending') && (
+                                            <button
+                                                onClick={() => setChatRental(rental)}
+                                                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition text-sm"
+                                            >
+                                                <MessageSquare className="w-4 h-4" />
+                                                Chat com Locador
+                                            </button>
+                                        )}
+
+                                        {/* Inspection Button - for active rentals */}
+                                        {rental.status === 'active' && (
+                                            <>
+                                                <button
+                                                    onClick={() => setInspectionRental(rental)}
+                                                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition text-sm"
+                                                >
+                                                    <Camera className="w-4 h-4" />
+                                                    Fazer Vistoria
+                                                </button>
+                                                <button
+                                                    onClick={() => setViewInspection(rental)}
+                                                    className="flex items-center gap-2 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition text-sm"
+                                                >
+                                                    <Eye className="w-4 h-4" />
+                                                    Ver Vistorias
+                                                </button>
+                                            </>
+                                        )}
+
                                         {rental.status === 'completed' && !existingReviews[rental.id] && (
                                             <button
                                                 onClick={() => setReviewModal(rental)}
@@ -636,6 +675,15 @@ export const RenterHistory: React.FC<RenterHistoryProps> = ({ currentUser, showT
                                                 <CheckCircle className="w-4 h-4 text-green-600" />
                                                 Avaliado
                                             </span>
+                                        )}
+                                        {rental.status === 'completed' && (
+                                            <button
+                                                onClick={() => setViewInspection(rental)}
+                                                className="flex items-center gap-2 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition text-sm"
+                                            >
+                                                <Camera className="w-4 h-4" />
+                                                Ver Vistorias
+                                            </button>
                                         )}
                                         <button className="flex items-center gap-2 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition text-sm">
                                             <Repeat className="w-4 h-4" />
@@ -704,6 +752,42 @@ export const RenterHistory: React.FC<RenterHistoryProps> = ({ currentUser, showT
                     </div>
                 )
             }
+
+            {/* Chat Modal */}
+            {chatRental && chatRental.car && (
+                <Chat
+                    currentUser={currentUser}
+                    otherUser={{ id: chatRental.ownerId, name: (chatRental as any).ownerName || 'Locador' }}
+                    rentalId={chatRental.id}
+                    onClose={() => setChatRental(null)}
+                />
+            )}
+
+            {/* Vehicle Inspection Modal */}
+            {inspectionRental && inspectionRental.car && (
+                <VehicleInspection
+                    rentalId={inspectionRental.id}
+                    carId={inspectionRental.carId}
+                    car={inspectionRental.car as any}
+                    inspectorId={currentUser.id}
+                    inspectorName={currentUser.name}
+                    inspectionType="check_out"
+                    onComplete={(inspectionId) => {
+                        showToast?.('Vistoria registrada com sucesso!', 'success');
+                        setInspectionRental(null);
+                    }}
+                    onClose={() => setInspectionRental(null)}
+                />
+            )}
+
+            {/* Inspection Viewer Modal */}
+            {viewInspection && viewInspection.car && (
+                <InspectionViewer
+                    rentalId={viewInspection.id}
+                    carName={`${viewInspection.car.make} ${viewInspection.car.model}`}
+                    onClose={() => setViewInspection(null)}
+                />
+            )}
         </div >
     );
 };

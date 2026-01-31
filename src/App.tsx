@@ -11,8 +11,9 @@ import { NotificationBell } from './components/NotificationBell';
 import { PaymentHistory } from './components/PaymentHistory';
 import { Login } from './components/Login';
 import { KYCVerification } from './components/KYCVerification';
+import { ConversationList } from './components/ConversationList';
 import { ToastProvider, useToast, ToastStyles } from './components/Toast';
-import { CarFront, UserCircle, LogOut, Shield, CheckCircle, ChevronDown, HelpCircle, CreditCard, LayoutDashboard } from 'lucide-react';
+import { CarFront, UserCircle, LogOut, Shield, CheckCircle, ChevronDown, HelpCircle, CreditCard, LayoutDashboard, MessageCircle } from 'lucide-react';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { supabase } from './lib/supabase';
 
@@ -22,6 +23,7 @@ function AppContent() {
   const [renterView, setRenterView] = useState<'marketplace' | 'history' | 'help' | 'payments'>('marketplace');
   const [showKYC, setShowKYC] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showConversations, setShowConversations] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [hasPlayedSound, setHasPlayedSound] = useState(false);
 
@@ -407,6 +409,14 @@ function AppContent() {
         />
       )}
 
+      {/* Conversations Modal */}
+      {showConversations && (
+        <ConversationList
+          currentUser={currentUser}
+          onClose={() => setShowConversations(false)}
+        />
+      )}
+
       {/* Navigation */}
       <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -461,6 +471,15 @@ function AppContent() {
                 onMarkAsRead={handleMarkNotificationAsRead}
                 onMarkAllAsRead={handleMarkAllNotificationsAsRead}
               />
+
+              {/* Messages Button */}
+              <button
+                onClick={() => setShowConversations(true)}
+                className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-full transition relative"
+                title="Mensagens"
+              >
+                <MessageCircle className="w-5 h-5" />
+              </button>
 
               {/* Profile Dropdown */}
               <div className="relative">
